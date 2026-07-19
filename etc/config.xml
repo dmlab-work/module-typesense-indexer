@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © MageDevGroup. All rights reserved.
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+    <default>
+        <catalog>
+            <search>
+                <typesense_server_port>8108</typesense_server_port>
+                <typesense_index_prefix>typesense</typesense_index_prefix>
+                <typesense_server_timeout>5</typesense_server_timeout>
+                <typesense_protocol>http</typesense_protocol>
+                <typesense_operation_timeout>300</typesense_operation_timeout>
+                <typesense_retry_count>2</typesense_retry_count>
+                <typesense_health_cache_ttl>30</typesense_health_cache_ttl>
+            </search>
+        </catalog>
+        <magedevgroup_typesense>
+            <schema>
+                <rebuild_threshold>500000</rebuild_threshold>
+                <decision_override>auto</decision_override>
+            </schema>
+            <indexer>
+                <use_native_invalidation>0</use_native_invalidation>
+            </indexer>
+        </magedevgroup_typesense>
+    </default>
+</config>
