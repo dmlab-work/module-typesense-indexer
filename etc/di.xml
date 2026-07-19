@@ -1,0 +1,132 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © MageDevGroup. All rights reserved.
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <!--
+        indexer owns the connection config: it reads catalog/search/typesense_* and overrides
+        core's throwing NotConfiguredConnectionSettings default with the real reader.
+    -->
+    <preference for="MageDevGroup\TypesenseCore\Api\ConnectionSettingsInterface"
+                type="MageDevGroup\TypesenseIndexer\Model\ConnectionSettings"/>
+
+    <!--
+        Keep the connection out of shared app/etc/config.php: the admin API key is sensitive
+        (env.php only) and the rest are environment-overridable so a deployment can set
+        hostname/port/prefix/timeout per environment. The schema tunings are environment too.
+    -->
+    <type name="Magento\Config\Model\Config\TypePool">
+        <arguments>
+            <argument name="sensitive" xsi:type="array">
+                <item name="catalog/search/typesense_api_key" xsi:type="string">1</item>
+            </argument>
+            <argument name="environment" xsi:type="array">
+                <item name="catalog/search/typesense_server_hostname" xsi:type="string">1</item>
+                <item name="catalog/search/typesense_server_port" xsi:type="string">1</item>
+                <item name="catalog/search/typesense_index_prefix" xsi:type="string">1</item>
+                <item name="catalog/search/typesense_server_timeout" xsi:type="string">1</item>
+                <item name="catalog/search/typesense_protocol" xsi:type="string">1</item>
+                <item name="catalog/search/typesense_additional_nodes" xsi:type="string">1</item>
+                <item name="catalog/search/typesense_operation_timeout" xsi:type="string">1</item>
+                <item name="catalog/search/typesense_retry_count" xsi:type="string">1</item>
+                <item name="catalog/search/typesense_health_cache_ttl" xsi:type="string">1</item>
+                <item name="magedevgroup_typesense/schema/rebuild_threshold" xsi:type="string">1</item>
+                <item name="magedevgroup_typesense/schema/decision_override" xsi:type="string">1</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!--
+        The schema seam: `desired = base + Σ(providers)`. A module adds fields by di-merging
+        into this `providers` array; nobody PATCHes a collection directly (single-writer rule).
+    -->
+    <preference for="MageDevGroup\TypesenseIndexer\Model\Schema\FieldProviderInterface"
+                type="MageDevGroup\TypesenseIndexer\Model\Schema\CompositeFieldProvider"/>
+
+    <!--
+        The public "which fields are searchable, and at what weight" seam. `typesense-search` and
+        `typesense-instant-search` consume it for `query_by` / `query_by_weights`.
+    -->
+    <preference for="MageDevGroup\TypesenseIndexer\Api\SearchableFieldsProviderInterface"
+                type="MageDevGroup\TypesenseIndexer\Model\Schema\SearchableFieldsProvider"/>
+
+    <!--
+        Published alias-name and field-name authorities. `typesense-search` resolves the store's
+        collection alias and its document field names through these `Api\` contracts, never the
+        `Model\` concretes — the module boundary stays a published seam.
+    -->
+    <preference for="MageDevGroup\TypesenseIndexer\Api\IndexNameResolverInterface"
+                type="MageDevGroup\TypesenseIndexer\Model\Indexer\IndexNameResolver"/>
+    <preference for="MageDevGroup\TypesenseIndexer\Api\FieldNameResolverInterface"
+                type="MageDevGroup\TypesenseIndexer\Model\Schema\FieldNameResolver"/>
+
+    <type name="MageDevGroup\TypesenseIndexer\Model\Schema\CompositeFieldProvider">
+        <arguments>
+            <argument name="providers" xsi:type="array">
+                <item name="static" xsi:type="object">
+                    MageDevGroup\TypesenseIndexer\Model\Schema\Provider\StaticFieldProvider
+                </item>
+                <item name="attribute" xsi:type="object">
+                    MageDevGroup\TypesenseIndexer\Model\Schema\Provider\AttributeFieldProvider
+                </item>
+                <item name="category" xsi:type="object">
+                    MageDevGroup\TypesenseIndexer\Model\Schema\Provider\CategoryFieldProvider
+                </item>
+                <item name="price" xsi:type="object">
+                    MageDevGroup\TypesenseIndexer\Model\Schema\Provider\PriceFieldProvider
+                </item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!--
+        The document seam: FAT documents = seed + Σ(providers). A module adds document data by
+        di-merging into this `providers` chain; nobody writes to a collection directly.
+    -->
+    <preference for="MageDevGroup\TypesenseIndexer\Model\Document\DocumentDataProviderInterface"
+                type="MageDevGroup\TypesenseIndexer\Model\Document\CompositeDocumentDataProvider"/>
+
+    <type name="MageDevGroup\TypesenseIndexer\Model\Document\CompositeDocumentDataProvider">
+        <arguments>
+            <argument name="providers" xsi:type="array">
+                <item name="attribute" xsi:type="object">
+                    MageDevGroup\TypesenseIndexer\Model\Document\Provider\AttributeDataProvider
+                </item>
+                <item name="category" xsi:type="object">
+                    MageDevGroup\TypesenseIndexer\Model\Document\Provider\CategoryDataProvider
+                </item>
+                <item name="price" xsi:type="object">
+                    MageDevGroup\TypesenseIndexer\Model\Document\Provider\PriceDataProvider
+                </item>
+                <item name="stock" xsi:type="object">
+                    MageDevGroup\TypesenseIndexer\Model\Document\Provider\StockDataProvider
+                </item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!--
+        Attribute save → cheap schema PATCH. We wrap the native CatalogSearch attribute plugin (not
+        the resource model) because it invalidates from private state; `around afterSave` lets us take
+        over on Typesense while leaving ES/OpenSearch untouched. `AttributeSaveContext` is request-scoped
+        so newness captured in the before phase survives to the after phase (a shared singleton).
+    -->
+    <type name="Magento\CatalogSearch\Model\Indexer\Fulltext\Plugin\Attribute">
+        <plugin name="magedevgroup_typesense_indexer_attribute_schema_patch"
+                type="MageDevGroup\TypesenseIndexer\Model\Plugin\CatalogSearch\AttributeSchemaPatchPlugin"/>
+    </type>
+
+    <!--
+        Neutralise the native Elasticsearch attribute plugin. It throws when the created handler is not
+        an ElasticsearchIndexerHandler, and its gate (`isElasticsearchEnabled`) is true for us because
+        `typesense` is in the engine list. Registered unconditionally, gates itself at runtime on the
+        current engine — never `disabled="true"`, which would break a switch back to ES/OpenSearch.
+    -->
+    <type name="Magento\Elasticsearch\Model\Indexer\Fulltext\Plugin\Category\Product\Attribute">
+        <plugin name="magedevgroup_typesense_indexer_neutralise_es_attribute"
+                type="MageDevGroup\TypesenseIndexer\Model\Plugin\Elasticsearch\AttributeIndexerNeutralizePlugin"/>
+    </type>
+</config>

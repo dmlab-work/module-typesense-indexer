@@ -1,0 +1,152 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © MageDevGroup. All rights reserved.
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+        <!--
+            The connection lives under Catalog Search next to OpenSearch's own fields, gated on
+            engine=typesense. indexer owns these paths; search consumes the resulting connection
+            through core's ConnectionSettingsInterface.
+        -->
+        <section id="catalog">
+            <group id="search">
+                <field id="typesense_server_hostname" translate="label" type="text" sortOrder="71"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Typesense Server Hostname</label>
+                    <depends>
+                        <field id="engine">typesense</field>
+                    </depends>
+                </field>
+
+                <field id="typesense_server_port" translate="label" type="text" sortOrder="72"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Typesense Server Port</label>
+                    <depends>
+                        <field id="engine">typesense</field>
+                    </depends>
+                </field>
+
+                <field id="typesense_index_prefix" translate="label" type="text" sortOrder="73"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Typesense Index Prefix</label>
+                    <depends>
+                        <field id="engine">typesense</field>
+                    </depends>
+                </field>
+
+                <field id="typesense_api_key" translate="label comment" type="obscure" sortOrder="74"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Typesense API Key</label>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
+                    <comment>Typesense admin API key. Typesense authenticates with a single API key
+                        (not a username/password). Never exported by config:dump.</comment>
+                    <depends>
+                        <field id="engine">typesense</field>
+                    </depends>
+                </field>
+
+                <field id="typesense_server_timeout" translate="label" type="text" sortOrder="75"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Typesense Server Timeout</label>
+                    <depends>
+                        <field id="engine">typesense</field>
+                    </depends>
+                </field>
+
+                <field id="typesense_protocol" translate="label" type="select" sortOrder="76"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Typesense Protocol</label>
+                    <source_model>MageDevGroup\TypesenseIndexer\Model\Config\Source\Protocol</source_model>
+                    <depends>
+                        <field id="engine">typesense</field>
+                    </depends>
+                </field>
+
+                <field id="typesense_additional_nodes" translate="label comment" type="text" sortOrder="77"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Typesense Additional Nodes</label>
+                    <comment><![CDATA[Optional comma-separated <code>host:port</code> list for a
+                        high-availability cluster, tried after the primary server. Leave empty for a
+                        single node. Example: <code>typesense-2:8108,typesense-3:8108</code>.]]></comment>
+                    <depends>
+                        <field id="engine">typesense</field>
+                    </depends>
+                </field>
+
+                <field id="typesense_operation_timeout" translate="label comment" type="text" sortOrder="78"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Typesense Operation Timeout</label>
+                    <comment>Seconds allowed for a bulk import or a schema change, which answer only once
+                        the work is done. Raise it for large collections.</comment>
+                    <depends>
+                        <field id="engine">typesense</field>
+                    </depends>
+                </field>
+
+                <field id="typesense_retry_count" translate="label comment" type="text" sortOrder="79"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Typesense Retry Count</label>
+                    <comment>Retries per request after the node list is exhausted.</comment>
+                    <depends>
+                        <field id="engine">typesense</field>
+                    </depends>
+                </field>
+
+                <field id="typesense_health_cache_ttl" translate="label comment" type="text" sortOrder="80"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Typesense Health Cache TTL</label>
+                    <comment>Seconds a health-check result is cached. Keep low; 0 disables caching.</comment>
+                    <depends>
+                        <field id="engine">typesense</field>
+                    </depends>
+                </field>
+            </group>
+        </section>
+
+        <!--
+            The shared MageDevGroup tab and Typesense section. indexer defines them; other suite
+            modules (e.g. instant-search) add their own groups to this section.
+        -->
+        <tab id="magedevgroup" translate="label" sortOrder="400">
+            <label>MageDevGroup</label>
+        </tab>
+        <section id="magedevgroup_typesense" translate="label" type="text" sortOrder="20"
+                 showInDefault="1" showInWebsite="0" showInStore="0">
+            <class>separator-top</class>
+            <label>Typesense</label>
+            <tab>magedevgroup</tab>
+            <resource>MageDevGroup_TypesenseIndexer::config</resource>
+            <group id="schema" translate="label" type="text" sortOrder="20"
+                   showInDefault="1" showInWebsite="0" showInStore="0">
+                <label>Schema Changes</label>
+                <field id="rebuild_threshold" translate="label comment" type="text" sortOrder="10"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Rebuild Threshold</label>
+                    <comment>Document count above which a schema change is answered with a rebuild instead of an
+                        in-place patch, which blocks writes while it runs. 0 disables the size rule.</comment>
+                </field>
+                <field id="decision_override" translate="label comment" type="select" sortOrder="20"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Decision Override</label>
+                    <source_model>MageDevGroup\TypesenseIndexer\Model\Config\Source\SchemaDecision</source_model>
+                    <comment>Forces the decision regardless of collection size and type compatibility.</comment>
+                </field>
+            </group>
+            <group id="indexer" translate="label" type="text" sortOrder="30"
+                   showInDefault="1" showInWebsite="0" showInStore="0">
+                <label>Catalog Indexing</label>
+                <field id="use_native_invalidation" translate="label comment" type="select" sortOrder="10"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Reindex on Attribute Change</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Escape hatch. When Yes, an attribute flag change invalidates the whole fulltext
+                        index (native Magento behaviour) instead of applying an in-place schema patch.</comment>
+                </field>
+            </group>
+        </section>
+    </system>
+</config>
