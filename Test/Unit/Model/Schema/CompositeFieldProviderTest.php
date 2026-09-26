@@ -1,14 +1,14 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Schema;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Schema;
 
-use MageDevGroup\TypesenseCore\Model\Collection\FieldSpec;
-use MageDevGroup\TypesenseIndexer\Model\Schema\CompositeFieldProvider;
-use MageDevGroup\TypesenseIndexer\Model\Schema\FieldProviderInterface;
+use DmLab\TypesenseCore\Model\Collection\FieldSpec;
+use DmLab\TypesenseIndexer\Model\Schema\CompositeFieldProvider;
+use DmLab\TypesenseIndexer\Model\Schema\FieldProviderInterface;
 use PHPUnit\Framework\TestCase;
 
 class CompositeFieldProviderTest extends TestCase

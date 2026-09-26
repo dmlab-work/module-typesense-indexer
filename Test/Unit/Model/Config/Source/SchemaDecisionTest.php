@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Config\Source;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Config\Source;
 
-use MageDevGroup\TypesenseCore\Model\Schema\ReconcilePolicy;
-use MageDevGroup\TypesenseIndexer\Model\Config\Source\SchemaDecision;
+use DmLab\TypesenseCore\Model\Schema\ReconcilePolicy;
+use DmLab\TypesenseIndexer\Model\Config\Source\SchemaDecision;
 use PHPUnit\Framework\TestCase;
 
 class SchemaDecisionTest extends TestCase

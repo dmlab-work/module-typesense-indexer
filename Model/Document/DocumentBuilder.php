@@ -1,12 +1,12 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model\Document;
+namespace DmLab\TypesenseIndexer\Model\Document;
 
-use MageDevGroup\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
+use DmLab\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
 
 /**
  * Turns the indexer's `\Traversable` of raw index data into Typesense documents.

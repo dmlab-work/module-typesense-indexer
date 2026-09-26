@@ -1,10 +1,10 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Api;
+namespace DmLab\TypesenseIndexer\Api;
 
 /**
  * Published authority for the alias name of an indexer in a store view.

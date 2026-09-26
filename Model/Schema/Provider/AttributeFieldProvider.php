@@ -1,14 +1,14 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model\Schema\Provider;
+namespace DmLab\TypesenseIndexer\Model\Schema\Provider;
 
-use MageDevGroup\TypesenseCore\Model\Collection\FieldSpec;
-use MageDevGroup\TypesenseIndexer\Model\Schema\AttributeFieldPolicy;
-use MageDevGroup\TypesenseIndexer\Model\Schema\FieldProviderInterface;
+use DmLab\TypesenseCore\Model\Collection\FieldSpec;
+use DmLab\TypesenseIndexer\Model\Schema\AttributeFieldPolicy;
+use DmLab\TypesenseIndexer\Model\Schema\FieldProviderInterface;
 use Magento\Catalog\Model\ResourceModel\Product\Attribute\CollectionFactory;
 
 /**

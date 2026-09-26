@@ -1,22 +1,22 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Indexer;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Indexer;
 
-use MageDevGroup\TypesenseCore\Exception\TypesenseException;
-use MageDevGroup\TypesenseCore\Model\Collection\AliasManager;
-use MageDevGroup\TypesenseCore\Model\Collection\CollectionManager;
-use MageDevGroup\TypesenseCore\Model\Collection\FieldSpec;
-use MageDevGroup\TypesenseIndexer\Model\ConnectionSettings;
-use MageDevGroup\TypesenseIndexer\Model\Indexer\IndexNameResolver;
-use MageDevGroup\TypesenseIndexer\Model\Indexer\IndexStructure;
-use MageDevGroup\TypesenseIndexer\Model\Indexer\PendingCollectionRegistry;
-use MageDevGroup\TypesenseIndexer\Model\Indexer\StoreScopeResolver;
-use MageDevGroup\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
-use MageDevGroup\TypesenseIndexer\Model\Schema\FieldProviderInterface;
+use DmLab\TypesenseCore\Exception\TypesenseException;
+use DmLab\TypesenseCore\Model\Collection\AliasManager;
+use DmLab\TypesenseCore\Model\Collection\CollectionManager;
+use DmLab\TypesenseCore\Model\Collection\FieldSpec;
+use DmLab\TypesenseIndexer\Model\ConnectionSettings;
+use DmLab\TypesenseIndexer\Model\Indexer\IndexNameResolver;
+use DmLab\TypesenseIndexer\Model\Indexer\IndexStructure;
+use DmLab\TypesenseIndexer\Model\Indexer\PendingCollectionRegistry;
+use DmLab\TypesenseIndexer\Model\Indexer\StoreScopeResolver;
+use DmLab\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
+use DmLab\TypesenseIndexer\Model\Schema\FieldProviderInterface;
 use Magento\Framework\App\ScopeInterface;
 use Magento\Framework\App\ScopeResolverInterface;
 use Magento\Framework\Exception\LocalizedException;

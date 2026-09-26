@@ -1,12 +1,12 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Indexer;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Indexer;
 
-use MageDevGroup\TypesenseIndexer\Model\Indexer\StoreScopeResolver;
+use DmLab\TypesenseIndexer\Model\Indexer\StoreScopeResolver;
 use Magento\Framework\App\ScopeInterface;
 use Magento\Framework\App\ScopeResolverInterface;
 use Magento\Framework\Exception\LocalizedException;

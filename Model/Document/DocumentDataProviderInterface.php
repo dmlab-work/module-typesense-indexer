@@ -1,10 +1,10 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model\Document;
+namespace DmLab\TypesenseIndexer\Model\Document;
 
 /**
  * Contributes document data to a store view's Typesense documents.

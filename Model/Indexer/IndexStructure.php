@@ -1,15 +1,15 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model\Indexer;
+namespace DmLab\TypesenseIndexer\Model\Indexer;
 
-use MageDevGroup\TypesenseCore\Exception\TypesenseException;
-use MageDevGroup\TypesenseCore\Model\Collection\AliasManager;
-use MageDevGroup\TypesenseCore\Model\Collection\CollectionManager;
-use MageDevGroup\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
+use DmLab\TypesenseCore\Exception\TypesenseException;
+use DmLab\TypesenseCore\Model\Collection\AliasManager;
+use DmLab\TypesenseCore\Model\Collection\CollectionManager;
+use DmLab\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Indexer\IndexStructureInterface;
 
@@ -63,7 +63,7 @@ class IndexStructure implements IndexStructureInterface
      * @param \Magento\Framework\Search\Request\Dimension[] $dimensions
      * @return void
      * @throws LocalizedException when no scope dimension is present
-     * @throws \MageDevGroup\TypesenseCore\Exception\TypesenseException
+     * @throws \DmLab\TypesenseCore\Exception\TypesenseException
      */
     public function create($index, array $fields, array $dimensions = [])
     {
@@ -83,7 +83,7 @@ class IndexStructure implements IndexStructureInterface
      * @param \Magento\Framework\Search\Request\Dimension[] $dimensions
      * @return void
      * @throws LocalizedException when no scope dimension is present
-     * @throws \MageDevGroup\TypesenseCore\Exception\TypesenseException
+     * @throws \DmLab\TypesenseCore\Exception\TypesenseException
      */
     public function delete($index, array $dimensions = [])
     {

@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model;
 
-use MageDevGroup\TypesenseCore\Exception\ConfigurationException;
-use MageDevGroup\TypesenseIndexer\Model\ConnectionSettings;
+use DmLab\TypesenseCore\Exception\ConfigurationException;
+use DmLab\TypesenseIndexer\Model\ConnectionSettings;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\Encryption\EncryptorInterface;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -320,7 +320,7 @@ class ConnectionSettingsTest extends TestCase
         self::assertSame('2', (string)$search->typesense_retry_count);
         self::assertSame('30', (string)$search->typesense_health_cache_ttl);
 
-        $schema = $xml->default->magedevgroup_typesense->schema;
+        $schema = $xml->default->dmlab_typesense->schema;
         self::assertSame('500000', (string)$schema->rebuild_threshold);
         self::assertSame('auto', (string)$schema->decision_override);
     }

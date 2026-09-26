@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  *
  * Standalone unit-test bootstrap: loads Magento's Composer autoloader (for the
  * framework classes this module depends on), registers a PSR-4 map for this
@@ -36,8 +36,8 @@ if (!$autoloaderLoaded) {
 // PSR-4 for this module and for its sibling `module-typesense-core` dependency,
 // so both resolve without a full `composer install` in the test environment.
 $psr4 = [
-    'MageDevGroup\\TypesenseIndexer\\' => $moduleRoot,
-    'MageDevGroup\\TypesenseCore\\' => dirname($moduleRoot) . '/module-typesense-core',
+    'DmLab\\TypesenseIndexer\\' => $moduleRoot,
+    'DmLab\\TypesenseCore\\' => dirname($moduleRoot) . '/module-typesense-core',
 ];
 
 spl_autoload_register(static function (string $class) use ($psr4): void {

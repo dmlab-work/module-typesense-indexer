@@ -1,12 +1,12 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model;
 
-use MageDevGroup\TypesenseIndexer\Api\EngineCode;
+use DmLab\TypesenseIndexer\Api\EngineCode;
 use PHPUnit\Framework\TestCase;
 
 class EngineCodeTest extends TestCase

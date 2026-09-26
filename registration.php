@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
@@ -8,6 +8,6 @@ use Magento\Framework\Component\ComponentRegistrar;
 
 ComponentRegistrar::register(
     ComponentRegistrar::MODULE,
-    'MageDevGroup_TypesenseIndexer',
+    'DmLab_TypesenseIndexer',
     __DIR__
 );

@@ -1,17 +1,17 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Document;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Document;
 
-use MageDevGroup\TypesenseCore\Model\Collection\FieldSpec;
-use MageDevGroup\TypesenseIndexer\Model\Document\CompositeDocumentDataProvider;
-use MageDevGroup\TypesenseIndexer\Model\Document\DocumentBuilder;
-use MageDevGroup\TypesenseIndexer\Model\Document\DocumentDataProviderInterface;
-use MageDevGroup\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
-use MageDevGroup\TypesenseIndexer\Model\Schema\FieldProviderInterface;
+use DmLab\TypesenseCore\Model\Collection\FieldSpec;
+use DmLab\TypesenseIndexer\Model\Document\CompositeDocumentDataProvider;
+use DmLab\TypesenseIndexer\Model\Document\DocumentBuilder;
+use DmLab\TypesenseIndexer\Model\Document\DocumentDataProviderInterface;
+use DmLab\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
+use DmLab\TypesenseIndexer\Model\Schema\FieldProviderInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

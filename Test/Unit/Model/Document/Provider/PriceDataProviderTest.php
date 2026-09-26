@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Document\Provider;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Document\Provider;
 
-use MageDevGroup\TypesenseIndexer\Model\Document\Provider\PriceDataProvider;
-use MageDevGroup\TypesenseIndexer\Model\Schema\FieldNameResolver;
+use DmLab\TypesenseIndexer\Model\Document\Provider\PriceDataProvider;
+use DmLab\TypesenseIndexer\Model\Schema\FieldNameResolver;
 use Magento\Catalog\Model\Indexer\Product\Price\DimensionCollectionFactory;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Adapter\AdapterInterface;

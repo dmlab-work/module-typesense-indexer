@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -18,7 +18,7 @@
                 <typesense_health_cache_ttl>30</typesense_health_cache_ttl>
             </search>
         </catalog>
-        <magedevgroup_typesense>
+        <dmlab_typesense>
             <schema>
                 <rebuild_threshold>500000</rebuild_threshold>
                 <decision_override>auto</decision_override>
@@ -26,6 +26,6 @@
             <indexer>
                 <use_native_invalidation>0</use_native_invalidation>
             </indexer>
-        </magedevgroup_typesense>
+        </dmlab_typesense>
     </default>
 </config>

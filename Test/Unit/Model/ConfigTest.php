@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model;
 
-use MageDevGroup\TypesenseCore\Model\Schema\ReconcilePolicy;
-use MageDevGroup\TypesenseIndexer\Model\Config;
+use DmLab\TypesenseCore\Model\Schema\ReconcilePolicy;
+use DmLab\TypesenseIndexer\Model\Config;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;

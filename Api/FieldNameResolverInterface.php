@@ -1,10 +1,10 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Api;
+namespace DmLab\TypesenseIndexer\Api;
 
 /**
  * Published mapping from a Magento attribute code to the Typesense document field name.

@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Schema;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Schema;
 
-use MageDevGroup\TypesenseIndexer\Model\Schema\AttributeFieldPolicy;
-use MageDevGroup\TypesenseIndexer\Model\Schema\FieldNameResolver;
+use DmLab\TypesenseIndexer\Model\Schema\AttributeFieldPolicy;
+use DmLab\TypesenseIndexer\Model\Schema\FieldNameResolver;
 use Magento\Catalog\Model\ResourceModel\Eav\Attribute;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

@@ -1,23 +1,23 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Indexer;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Indexer;
 
-use MageDevGroup\TypesenseCore\Exception\TypesenseException;
-use MageDevGroup\TypesenseCore\Model\Client\HealthChecker;
-use MageDevGroup\TypesenseCore\Model\Collection\AliasManager;
-use MageDevGroup\TypesenseCore\Model\Collection\CollectionManager;
-use MageDevGroup\TypesenseCore\Model\Document\DocumentWriter;
-use MageDevGroup\TypesenseCore\Model\Document\ImportResult;
-use MageDevGroup\TypesenseIndexer\Model\Document\DocumentBuilder;
-use MageDevGroup\TypesenseIndexer\Model\ConnectionSettings;
-use MageDevGroup\TypesenseIndexer\Model\Indexer\IndexNameResolver;
-use MageDevGroup\TypesenseIndexer\Model\Indexer\IndexerHandler;
-use MageDevGroup\TypesenseIndexer\Model\Indexer\PendingCollectionRegistry;
-use MageDevGroup\TypesenseIndexer\Model\Indexer\StoreScopeResolver;
+use DmLab\TypesenseCore\Exception\TypesenseException;
+use DmLab\TypesenseCore\Model\Client\HealthChecker;
+use DmLab\TypesenseCore\Model\Collection\AliasManager;
+use DmLab\TypesenseCore\Model\Collection\CollectionManager;
+use DmLab\TypesenseCore\Model\Document\DocumentWriter;
+use DmLab\TypesenseCore\Model\Document\ImportResult;
+use DmLab\TypesenseIndexer\Model\Document\DocumentBuilder;
+use DmLab\TypesenseIndexer\Model\ConnectionSettings;
+use DmLab\TypesenseIndexer\Model\Indexer\IndexNameResolver;
+use DmLab\TypesenseIndexer\Model\Indexer\IndexerHandler;
+use DmLab\TypesenseIndexer\Model\Indexer\PendingCollectionRegistry;
+use DmLab\TypesenseIndexer\Model\Indexer\StoreScopeResolver;
 use Magento\Framework\App\DeploymentConfig;
 use Magento\Framework\App\ScopeInterface;
 use Magento\Framework\App\ScopeResolverInterface;

@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model\Document\Provider;
+namespace DmLab\TypesenseIndexer\Model\Document\Provider;
 
-use MageDevGroup\TypesenseIndexer\Model\Document\DocumentDataProviderInterface;
-use MageDevGroup\TypesenseIndexer\Model\Schema\FieldNameResolver;
+use DmLab\TypesenseIndexer\Model\Document\DocumentDataProviderInterface;
+use DmLab\TypesenseIndexer\Model\Schema\FieldNameResolver;
 use Magento\Catalog\Model\Indexer\Product\Price\DimensionCollectionFactory;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Search\Request\IndexScopeResolverInterface;
@@ -17,7 +17,7 @@ use Magento\Store\Model\StoreManagerInterface;
 /**
  * Final price per customer group for the store view's website (`price_<group>_<website>`),
  * read from the price index — the same field names the
- * {@see \MageDevGroup\TypesenseIndexer\Model\Schema\Provider\PriceFieldProvider} declares.
+ * {@see \DmLab\TypesenseIndexer\Model\Schema\Provider\PriceFieldProvider} declares.
  *
  * The base `catalog_product_index_price` table is only maintained when the price indexer runs in the
  * default (`none`) dimensions mode; under a `website` / `customer_group` mode Magento keeps the data

@@ -1,15 +1,15 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Plugin\CatalogSearch;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Plugin\CatalogSearch;
 
-use MageDevGroup\TypesenseIndexer\Model\Plugin\AttributeSaveContext;
-use MageDevGroup\TypesenseIndexer\Model\Plugin\AttributeSaveHandler;
-use MageDevGroup\TypesenseIndexer\Model\Plugin\CatalogSearch\AttributeSchemaPatchPlugin;
-use MageDevGroup\TypesenseIndexer\Model\Schema\AttributeFieldPolicy;
+use DmLab\TypesenseIndexer\Model\Plugin\AttributeSaveContext;
+use DmLab\TypesenseIndexer\Model\Plugin\AttributeSaveHandler;
+use DmLab\TypesenseIndexer\Model\Plugin\CatalogSearch\AttributeSchemaPatchPlugin;
+use DmLab\TypesenseIndexer\Model\Schema\AttributeFieldPolicy;
 use Magento\Catalog\Model\ResourceModel\Attribute as AttributeResourceModel;
 use Magento\CatalogSearch\Model\Indexer\Fulltext\Plugin\Attribute as NativeAttributePlugin;
 use Magento\Eav\Model\Entity\Attribute\AbstractAttribute;

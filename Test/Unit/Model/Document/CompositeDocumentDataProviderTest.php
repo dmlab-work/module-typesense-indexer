@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Document;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Document;
 
-use MageDevGroup\TypesenseIndexer\Model\Document\CompositeDocumentDataProvider;
-use MageDevGroup\TypesenseIndexer\Model\Document\DocumentDataProviderInterface;
+use DmLab\TypesenseIndexer\Model\Document\CompositeDocumentDataProvider;
+use DmLab\TypesenseIndexer\Model\Document\DocumentDataProviderInterface;
 use PHPUnit\Framework\TestCase;
 
 class CompositeDocumentDataProviderTest extends TestCase

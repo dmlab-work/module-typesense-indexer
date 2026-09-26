@@ -1,19 +1,19 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model\Indexer;
+namespace DmLab\TypesenseIndexer\Model\Indexer;
 
-use MageDevGroup\TypesenseIndexer\Api\IndexNameResolverInterface;
-use MageDevGroup\TypesenseIndexer\Model\ConnectionSettings;
+use DmLab\TypesenseIndexer\Api\IndexNameResolverInterface;
+use DmLab\TypesenseIndexer\Model\ConnectionSettings;
 
 /**
  * Derives the stable alias name for an indexer in a store view: `<prefix>_<indexerId>_<storeId>`.
  *
  * The alias is what consumers query; the physical collection behind it is versioned and swapped
- * (see core's {@see \MageDevGroup\TypesenseCore\Model\Collection\AliasManager}). This mirrors ES's
+ * (see core's {@see \DmLab\TypesenseCore\Model\Collection\AliasManager}). This mirrors ES's
  * `IndexNameResolver::getIndexNameForAlias()` so per-store scoping and the reindex-and-swap model
  * line up with Magento's own conventions. Shared by {@see IndexStructure}, the indexer handler and
  * the attribute-save schema-PATCH plugin so they all address the same alias.
