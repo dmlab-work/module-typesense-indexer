@@ -1,10 +1,10 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Api;
+namespace DmLab\TypesenseIndexer\Api;
 
 /**
  * The search-engine identifier this suite registers into Magento's engine list.

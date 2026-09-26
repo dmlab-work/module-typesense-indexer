@@ -1,16 +1,16 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Api;
+namespace DmLab\TypesenseIndexer\Api;
 
 /**
  * The public read seam for "which fields are searchable, and at what query weight".
  *
  * This is the ONLY supported way to learn the searchable field set. It is derived from the
- * same {@see \MageDevGroup\TypesenseIndexer\Model\Schema\AttributeFieldPolicy} that builds the
+ * same {@see \DmLab\TypesenseIndexer\Model\Schema\AttributeFieldPolicy} that builds the
  * schema — `is_searchable` selects the field, `search_weight` gives its weight — so the query
  * side can never drift from the indexed side.
  *

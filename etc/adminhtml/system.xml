@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -60,7 +60,7 @@
                 <field id="typesense_protocol" translate="label" type="select" sortOrder="76"
                        showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Typesense Protocol</label>
-                    <source_model>MageDevGroup\TypesenseIndexer\Model\Config\Source\Protocol</source_model>
+                    <source_model>DmLab\TypesenseIndexer\Model\Config\Source\Protocol</source_model>
                     <depends>
                         <field id="engine">typesense</field>
                     </depends>
@@ -108,18 +108,18 @@
         </section>
 
         <!--
-            The shared MageDevGroup tab and Typesense section. indexer defines them; other suite
+            The shared DmLab tab and Typesense section. indexer defines them; other suite
             modules (e.g. instant-search) add their own groups to this section.
         -->
-        <tab id="magedevgroup" translate="label" sortOrder="400">
-            <label>MageDevGroup</label>
+        <tab id="dmlab" translate="label" sortOrder="400">
+            <label>DMLab</label>
         </tab>
-        <section id="magedevgroup_typesense" translate="label" type="text" sortOrder="20"
+        <section id="dmlab_typesense" translate="label" type="text" sortOrder="20"
                  showInDefault="1" showInWebsite="0" showInStore="0">
             <class>separator-top</class>
             <label>Typesense</label>
-            <tab>magedevgroup</tab>
-            <resource>MageDevGroup_TypesenseIndexer::config</resource>
+            <tab>dmlab</tab>
+            <resource>DmLab_TypesenseIndexer::config</resource>
             <group id="schema" translate="label" type="text" sortOrder="20"
                    showInDefault="1" showInWebsite="0" showInStore="0">
                 <label>Schema Changes</label>
@@ -132,7 +132,7 @@
                 <field id="decision_override" translate="label comment" type="select" sortOrder="20"
                        showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Decision Override</label>
-                    <source_model>MageDevGroup\TypesenseIndexer\Model\Config\Source\SchemaDecision</source_model>
+                    <source_model>DmLab\TypesenseIndexer\Model\Config\Source\SchemaDecision</source_model>
                     <comment>Forces the decision regardless of collection size and type compatibility.</comment>
                 </field>
             </group>

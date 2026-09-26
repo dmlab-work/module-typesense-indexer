@@ -1,12 +1,12 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Indexer;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Indexer;
 
-use MageDevGroup\TypesenseIndexer\Model\Indexer\PendingCollectionRegistry;
+use DmLab\TypesenseIndexer\Model\Indexer\PendingCollectionRegistry;
 use PHPUnit\Framework\TestCase;
 
 class PendingCollectionRegistryTest extends TestCase

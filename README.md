@@ -1,4 +1,4 @@
-# MageDevGroup_TypesenseIndexer
+# DmLab_TypesenseIndexer
 
 Turns the Magento catalog into Typesense documents and owns the **attribute → schema policy**
 (L1 of the Typesense suite). It implements Magento's indexer contracts
@@ -6,17 +6,17 @@ Turns the Magento catalog into Typesense documents and owns the **attribute → 
 `catalogsearch_fulltext` indexer writes to Typesense instead of Elasticsearch/OpenSearch.
 
 It is the **single writer** of catalog collections — `typesense-search` and any future read model
-consume the same documents without forking the pipeline. Depends on `magedevgroup/module-typesense-core`.
+consume the same documents without forking the pipeline. Depends on `dmlab/module-typesense-core`.
 
 ## Install
 
 ```bash
-composer require magedevgroup/module-typesense-indexer
-bin/magento module:enable MageDevGroup_TypesenseIndexer
+composer require dmlab/module-typesense-indexer
+bin/magento module:enable DmLab_TypesenseIndexer
 bin/magento setup:upgrade
 ```
 
-Add `magedevgroup/module-typesense-search` to select `typesense` as the search engine and query it.
+Add `dmlab/module-typesense-search` to select `typesense` as the search engine and query it.
 
 ## Configuration
 
@@ -26,9 +26,9 @@ This module **owns the Typesense configuration**; core is pure transport and con
 - **Connection** — *Stores → Configuration → Catalog → Catalog Search*, shown when the engine is
   `typesense` (`catalog/search/typesense_*`: host, port, index prefix, API key, protocol, additional
   nodes, timeouts, retry, health-cache TTL). The API key is encrypted and `sensitive`.
-- **Schema policy** — *MageDevGroup → Typesense → Schema Changes* (`rebuild_threshold` default
+- **Schema policy** — *DMLab → Typesense → Schema Changes* (`rebuild_threshold` default
   500000, `decision_override` default `auto`).
-- The `magedevgroup` tab, `magedevgroup_typesense` section and `MageDevGroup_TypesenseIndexer::config`
+- The `dmlab` tab, `dmlab_typesense` section and `DmLab_TypesenseIndexer::config`
   ACL resource are defined here; other suite modules only add their own groups.
 
 ## FAT documents, THIN schema — why flag changes are cheap
@@ -45,8 +45,8 @@ makes a facet appear with no reindex — the flagship free feature. A genuinely 
 reindexes (its values are in no document yet); if an in-place PATCH is unsafe or over threshold, the
 module falls back to native invalidation rather than leave the schema stale.
 
-Escape hatch: *MageDevGroup → Typesense → Catalog Indexing → Reindex on Attribute Change = Yes*
-(`magedevgroup_typesense/indexer/use_native_invalidation`, default No) disables the PATCH path.
+Escape hatch: *DMLab → Typesense → Catalog Indexing → Reindex on Attribute Change = Yes*
+(`dmlab_typesense/indexer/use_native_invalidation`, default No) disables the PATCH path.
 
 ## Reindex model
 
@@ -72,8 +72,8 @@ Register a provider by merging into the matching composite's `providers` array i
 
 ## Requirements
 
-Magento 2.4.x · PHP 8.3–8.5 · `magedevgroup/module-typesense-core`.
+Magento 2.4.x · PHP 8.3–8.5 · `dmlab/module-typesense-core`.
 
 ## License
 
-OSL-3.0 © MageDevGroup.
+OSL-3.0 © DMLab.

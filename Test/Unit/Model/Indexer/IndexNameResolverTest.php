@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Indexer;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Indexer;
 
-use MageDevGroup\TypesenseIndexer\Model\ConnectionSettings;
-use MageDevGroup\TypesenseIndexer\Model\Indexer\IndexNameResolver;
+use DmLab\TypesenseIndexer\Model\ConnectionSettings;
+use DmLab\TypesenseIndexer\Model\Indexer\IndexNameResolver;
 use PHPUnit\Framework\TestCase;
 
 class IndexNameResolverTest extends TestCase

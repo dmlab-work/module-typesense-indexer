@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Schema\Provider;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Schema\Provider;
 
-use MageDevGroup\TypesenseCore\Model\Collection\FieldSpec;
-use MageDevGroup\TypesenseIndexer\Model\Schema\Provider\StaticFieldProvider;
+use DmLab\TypesenseCore\Model\Collection\FieldSpec;
+use DmLab\TypesenseIndexer\Model\Schema\Provider\StaticFieldProvider;
 use PHPUnit\Framework\TestCase;
 
 class StaticFieldProviderTest extends TestCase

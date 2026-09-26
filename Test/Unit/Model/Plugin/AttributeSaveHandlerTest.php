@@ -1,22 +1,22 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Plugin;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Plugin;
 
-use MageDevGroup\TypesenseCore\Exception\TypesenseException;
-use MageDevGroup\TypesenseCore\Model\Collection\AliasManager;
-use MageDevGroup\TypesenseCore\Model\Schema\Decision;
-use MageDevGroup\TypesenseCore\Model\Schema\ReconcilePolicy;
-use MageDevGroup\TypesenseCore\Model\Schema\Reconciler;
-use MageDevGroup\TypesenseIndexer\Model\Config;
-use MageDevGroup\TypesenseIndexer\Model\ConnectionSettings;
-use MageDevGroup\TypesenseIndexer\Api\EngineCode;
-use MageDevGroup\TypesenseIndexer\Model\Indexer\IndexNameResolver;
-use MageDevGroup\TypesenseIndexer\Model\Plugin\AttributeSaveHandler;
-use MageDevGroup\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
+use DmLab\TypesenseCore\Exception\TypesenseException;
+use DmLab\TypesenseCore\Model\Collection\AliasManager;
+use DmLab\TypesenseCore\Model\Schema\Decision;
+use DmLab\TypesenseCore\Model\Schema\ReconcilePolicy;
+use DmLab\TypesenseCore\Model\Schema\Reconciler;
+use DmLab\TypesenseIndexer\Model\Config;
+use DmLab\TypesenseIndexer\Model\ConnectionSettings;
+use DmLab\TypesenseIndexer\Api\EngineCode;
+use DmLab\TypesenseIndexer\Model\Indexer\IndexNameResolver;
+use DmLab\TypesenseIndexer\Model\Plugin\AttributeSaveHandler;
+use DmLab\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
 use Magento\Eav\Model\Config as EavConfig;
 use Magento\Eav\Model\Entity\Type;
 use Magento\Framework\Indexer\IndexerInterface;

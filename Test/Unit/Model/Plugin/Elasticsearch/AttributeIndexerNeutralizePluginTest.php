@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Plugin\Elasticsearch;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Plugin\Elasticsearch;
 
-use MageDevGroup\TypesenseIndexer\Api\EngineCode;
-use MageDevGroup\TypesenseIndexer\Model\Plugin\Elasticsearch\AttributeIndexerNeutralizePlugin;
+use DmLab\TypesenseIndexer\Api\EngineCode;
+use DmLab\TypesenseIndexer\Model\Plugin\Elasticsearch\AttributeIndexerNeutralizePlugin;
 use Magento\Catalog\Model\ResourceModel\Attribute as AttributeResourceModel;
 use Magento\Elasticsearch\Model\Indexer\Fulltext\Plugin\Category\Product\Attribute as NativeEsAttributePlugin;
 use Magento\Framework\Search\EngineResolverInterface;

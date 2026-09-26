@@ -1,12 +1,12 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Test\Unit\Model\Document\Provider;
+namespace DmLab\TypesenseIndexer\Test\Unit\Model\Document\Provider;
 
-use MageDevGroup\TypesenseIndexer\Model\Document\Provider\AttributeDataProvider;
+use DmLab\TypesenseIndexer\Model\Document\Provider\AttributeDataProvider;
 use Magento\Catalog\Model\Product;
 use Magento\Catalog\Model\ResourceModel\Eav\Attribute;
 use Magento\Catalog\Model\ResourceModel\Product\Attribute\Collection as AttributeCollection;

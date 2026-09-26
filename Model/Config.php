@@ -1,16 +1,16 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model;
+namespace DmLab\TypesenseIndexer\Model;
 
-use MageDevGroup\TypesenseCore\Model\Schema\ReconcilePolicy;
+use DmLab\TypesenseCore\Model\Schema\ReconcilePolicy;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 
 /**
- * Reader for this module's own `magedevgroup_typesense/*` configuration.
+ * Reader for this module's own `dmlab_typesense/*` configuration.
  *
  * The connection (`catalog/search/typesense_*`) is read by {@see ConnectionSettings};
  * this reader owns the indexer escape hatch and the schema-reconcile policy — the values
@@ -22,13 +22,13 @@ class Config
      * When set, attribute saves fall back to Magento's native reindex-on-change semantics instead
      * of the in-place schema PATCH — the escape hatch for a site that wants stock behaviour.
      */
-    public const XML_PATH_USE_NATIVE_INVALIDATION = 'magedevgroup_typesense/indexer/use_native_invalidation';
+    public const XML_PATH_USE_NATIVE_INVALIDATION = 'dmlab_typesense/indexer/use_native_invalidation';
 
     /** Document count above which a schema change is answered with `needs-rebuild`. */
-    public const XML_PATH_REBUILD_THRESHOLD = 'magedevgroup_typesense/schema/rebuild_threshold';
+    public const XML_PATH_REBUILD_THRESHOLD = 'dmlab_typesense/schema/rebuild_threshold';
 
     /** Forces the reconciler's decision regardless of size and type compatibility. */
-    public const XML_PATH_DECISION_OVERRIDE = 'magedevgroup_typesense/schema/decision_override';
+    public const XML_PATH_DECISION_OVERRIDE = 'dmlab_typesense/schema/decision_override';
 
     /** Decisions the admin source model offers; the values match core's {@see ReconcilePolicy} constants. */
     public const ALLOWED_DECISIONS = [

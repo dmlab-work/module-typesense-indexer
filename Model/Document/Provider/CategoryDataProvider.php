@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model\Document\Provider;
+namespace DmLab\TypesenseIndexer\Model\Document\Provider;
 
-use MageDevGroup\TypesenseIndexer\Model\Document\DocumentDataProviderInterface;
-use MageDevGroup\TypesenseIndexer\Model\Schema\FieldNameResolver;
+use DmLab\TypesenseIndexer\Model\Document\DocumentDataProviderInterface;
+use DmLab\TypesenseIndexer\Model\Schema\FieldNameResolver;
 use Magento\Catalog\Model\Indexer\Category\Product\AbstractAction;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Indexer\DimensionFactory;

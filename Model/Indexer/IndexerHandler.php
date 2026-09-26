@@ -1,18 +1,18 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model\Indexer;
+namespace DmLab\TypesenseIndexer\Model\Indexer;
 
-use MageDevGroup\TypesenseCore\Exception\TypesenseException;
-use MageDevGroup\TypesenseCore\Model\Collection\AliasManager;
-use MageDevGroup\TypesenseCore\Model\Collection\CollectionManager;
-use MageDevGroup\TypesenseCore\Model\Client\HealthChecker;
-use MageDevGroup\TypesenseCore\Model\Document\DocumentWriter;
-use MageDevGroup\TypesenseCore\Model\Document\ImportResult;
-use MageDevGroup\TypesenseIndexer\Model\Document\DocumentBuilder;
+use DmLab\TypesenseCore\Exception\TypesenseException;
+use DmLab\TypesenseCore\Model\Collection\AliasManager;
+use DmLab\TypesenseCore\Model\Collection\CollectionManager;
+use DmLab\TypesenseCore\Model\Client\HealthChecker;
+use DmLab\TypesenseCore\Model\Document\DocumentWriter;
+use DmLab\TypesenseCore\Model\Document\ImportResult;
+use DmLab\TypesenseIndexer\Model\Document\DocumentBuilder;
 use Magento\Catalog\Model\Category;
 use Magento\CatalogSearch\Model\Indexer\Fulltext;
 use Magento\CatalogSearch\Model\Indexer\Fulltext\Processor;

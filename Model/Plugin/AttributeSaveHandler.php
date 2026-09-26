@@ -1,17 +1,17 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model\Plugin;
+namespace DmLab\TypesenseIndexer\Model\Plugin;
 
-use MageDevGroup\TypesenseCore\Model\Collection\AliasManager;
-use MageDevGroup\TypesenseCore\Model\Schema\Reconciler;
-use MageDevGroup\TypesenseIndexer\Model\Config;
-use MageDevGroup\TypesenseIndexer\Api\EngineCode;
-use MageDevGroup\TypesenseIndexer\Model\Indexer\IndexNameResolver;
-use MageDevGroup\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
+use DmLab\TypesenseCore\Model\Collection\AliasManager;
+use DmLab\TypesenseCore\Model\Schema\Reconciler;
+use DmLab\TypesenseIndexer\Model\Config;
+use DmLab\TypesenseIndexer\Api\EngineCode;
+use DmLab\TypesenseIndexer\Model\Indexer\IndexNameResolver;
+use DmLab\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
 use Magento\Catalog\Model\Product;
 use Magento\CatalogSearch\Model\Indexer\Fulltext;
 use Magento\Eav\Model\Config as EavConfig;

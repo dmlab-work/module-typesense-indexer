@@ -1,10 +1,10 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model\Indexer;
+namespace DmLab\TypesenseIndexer\Model\Indexer;
 
 /**
  * Hands the freshly created physical collection from {@see IndexStructure} to the indexer handler.

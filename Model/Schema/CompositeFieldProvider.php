@@ -1,10 +1,10 @@
 <?php
 /**
- * Copyright © MageDevGroup. All rights reserved.
+ * Copyright © DMLab. All rights reserved.
  */
 declare(strict_types=1);
 
-namespace MageDevGroup\TypesenseIndexer\Model\Schema;
+namespace DmLab\TypesenseIndexer\Model\Schema;
 
 /**
  * A di-merged aggregate of {@see FieldProviderInterface}.
