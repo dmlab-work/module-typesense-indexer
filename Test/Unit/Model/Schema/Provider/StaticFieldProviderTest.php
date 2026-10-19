@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -22,12 +23,30 @@ class StaticFieldProviderTest extends TestCase
         }
 
         self::assertSame(
-            ['sku', 'store_id', 'visibility', 'status'],
+            ['sku', 'store_id', 'visibility', 'status', 'is_in_stock', 'is_out_of_stock'],
             array_keys($byName)
         );
+        self::assertSame(array_keys($byName), StaticFieldProvider::OWNED_FIELDS);
         self::assertSame('int32', $byName['store_id']->getType());
         self::assertTrue($byName['store_id']->getFacet());
         self::assertTrue($byName['sku']->getIndex());
+    }
+
+    public function testDeclaresOptionalIntStockFields(): void
+    {
+        $byName = [];
+        foreach ((new StaticFieldProvider())->getFields(1) as $spec) {
+            $byName[$spec->getName()] = $spec;
+        }
+
+        self::assertSame(
+            ['name' => 'is_in_stock', 'type' => 'int32', 'index' => true, 'optional' => true],
+            $byName['is_in_stock']->toArray()
+        );
+        self::assertSame(
+            ['name' => 'is_out_of_stock', 'type' => 'int32', 'sort' => true, 'optional' => true],
+            $byName['is_out_of_stock']->toArray()
+        );
     }
 
     public function testStaticFieldsAreStoreIndependent(): void

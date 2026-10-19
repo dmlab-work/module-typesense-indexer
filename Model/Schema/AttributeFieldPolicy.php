@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -8,6 +9,7 @@ namespace DmLab\TypesenseIndexer\Model\Schema;
 
 use DmLab\TypesenseCore\Model\Collection\FieldSpec;
 use Magento\Catalog\Model\ResourceModel\Eav\Attribute;
+use Magento\Eav\Model\Entity\Attribute\Source\Table;
 use Magento\Framework\Model\AbstractModel;
 
 /**
@@ -16,12 +18,13 @@ use Magento\Framework\Model\AbstractModel;
  * This is the THIN half of the FAT-documents / THIN-schema rule — the document carries
  * every attribute value regardless of flags, but the schema declares only what a flag
  * requires:
- *   - `is_searchable`                          → `index:true`
+ *   - `is_searchable`                          → `index:true` (option attributes: only when filterable;
+ *                                                their searchable part is the `<code>_value` label field)
  *   - `is_filterable` / `is_filterable_in_search` → `facet:true`
  *   - `used_for_sort_by`                       → `sort:true`
  *   - `backend_type` / `frontend_input`        → Typesense field type
  *
- * A flag that is off leaves the property `null` (engine default), keeping the payload minimal.
+ * An undeclared field leaves every flag `null`; a declared one carries explicit `facet`/`sort` booleans.
  * Every attribute-derived field is `optional:true` because catalogs are sparse.
  *
  * `search_weight` deliberately never reaches a `FieldSpec` — Typesense has no per-field weight;
@@ -55,6 +58,18 @@ class AttributeFieldPolicy
     ];
 
     /**
+     * The flags that put an attribute on the storefront; only such option attributes get public labels.
+     */
+    public const STOREFRONT_FLAGS = [
+        'is_searchable',
+        'is_filterable',
+        'is_filterable_in_search',
+        'is_visible_on_front',
+        'used_in_product_listing',
+        'used_for_sort_by',
+    ];
+
+    /**
      * @param FieldNameResolver $fieldNameResolver
      */
     public function __construct(
@@ -82,6 +97,22 @@ class AttributeFieldPolicy
     }
 
     /**
+     * Whether any schema-relevant flag is set — the gate for a new attribute, whose flags all read as changed.
+     *
+     * @param AbstractModel $attribute the attribute being saved
+     */
+    public function schemaFlagsSet(AbstractModel $attribute): bool
+    {
+        foreach (self::SCHEMA_FLAGS as $flag) {
+            if ($attribute->getData($flag)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Whether this save changed a flag that stales the cached search-request config.
      *
      * Mirrors native's reset gate so `is_visible_in_advanced_search` — which has no schema effect and so
@@ -101,6 +132,44 @@ class AttributeFieldPolicy
     }
 
     /**
+     * Whether the attribute is exposed on the storefront (any {@see STOREFRONT_FLAGS} set).
+     *
+     * @param Attribute $attribute
+     */
+    public function isStorefrontExposed(Attribute $attribute): bool
+    {
+        return (bool)$attribute->getIsSearchable()
+            || (bool)$attribute->getIsFilterable()
+            || (bool)$attribute->getIsFilterableInSearch()
+            || (bool)$attribute->getIsVisibleOnFront()
+            || (bool)$attribute->getUsedInProductListing()
+            || (bool)$attribute->getUsedForSortBy();
+    }
+
+    /**
+     * Whether this save turns a non-exposed option attribute into a storefront-exposed one.
+     *
+     * Its labels are then missing from the public documents, which only a reindex adds.
+     *
+     * @param AbstractModel $attribute the attribute being saved (carries its original data)
+     */
+    public function optionLabelsBecameExposed(AbstractModel $attribute): bool
+    {
+        if (!$attribute instanceof Attribute || !$this->isOptionAttribute($attribute)) {
+            return false;
+        }
+
+        $was = false;
+        $is = false;
+        foreach (self::STOREFRONT_FLAGS as $flag) {
+            $was = $was || (bool)$attribute->getOrigData($flag);
+            $is = $is || (bool)$attribute->getData($flag);
+        }
+
+        return !$was && $is;
+    }
+
+    /**
      * The `FieldSpec` this attribute contributes to the schema.
      *
      * @param Attribute $attribute
@@ -108,14 +177,77 @@ class AttributeFieldPolicy
      */
     public function toFieldSpec(Attribute $attribute, array $context = []): FieldSpec
     {
+        $index = $this->isOptionAttribute($attribute)
+            ? $this->isFilterable($attribute)
+            : $this->isSearchable($attribute);
+        $facet = $this->isFilterable($attribute);
+        $sort = $this->isSortable($attribute);
+        // A declared field states facet/sort explicitly, so switching one off is a diff, not "engine default".
+        $declared = $index || $facet || $sort;
+
         return new FieldSpec(
             name: $this->resolveFieldName($attribute, $context),
             type: $this->resolveType($attribute),
-            facet: $this->isFilterable($attribute) ? true : null,
-            index: $this->isSearchable($attribute) ? true : null,
-            sort: $this->isSortable($attribute) ? true : null,
+            facet: $declared ? $facet : null,
+            index: $index ? true : null,
+            sort: $declared ? $sort : null,
             optional: true
         );
+    }
+
+    /**
+     * The label fields an option attribute declares: `<code>_value` (`string[]`, index) when searchable
+     * and `sort_<code>` (`string`, sort) when `used_for_sort_by = 1`. The values are always in the
+     * documents, so toggling either flag is a schema PATCH.
+     *
+     * @param Attribute $attribute
+     * @return FieldSpec[]
+     */
+    public function toLabelFieldSpecs(Attribute $attribute): array
+    {
+        if (!$this->isOptionAttribute($attribute)) {
+            return [];
+        }
+
+        $specs = [];
+        if ($this->isSearchable($attribute)) {
+            $specs[] = new FieldSpec(
+                name: $this->labelFieldName($attribute),
+                type: 'string[]',
+                index: true,
+                optional: true
+            );
+        }
+        if ((int)$attribute->getUsedForSortBy() === 1) {
+            $specs[] = new FieldSpec(
+                name: $this->sortLabelFieldName($attribute),
+                type: 'string',
+                sort: true,
+                optional: true
+            );
+        }
+
+        return $specs;
+    }
+
+    /**
+     * The `<code>_value` field holding an option attribute's store labels.
+     *
+     * @param Attribute $attribute
+     */
+    public function labelFieldName(Attribute $attribute): string
+    {
+        return $attribute->getAttributeCode() . '_value';
+    }
+
+    /**
+     * The `sort_<code>` field holding the label of an option attribute's first value.
+     *
+     * @param Attribute $attribute
+     */
+    public function sortLabelFieldName(Attribute $attribute): string
+    {
+        return 'sort_' . $attribute->getAttributeCode();
     }
 
     /**
@@ -208,20 +340,46 @@ class AttributeFieldPolicy
     }
 
     /**
-     * Typesense field type from the attribute's backend/frontend type.
+     * Whether the attribute stores option ids.
      *
-     * `multiselect` is the only array type; a yes/no attribute is `bool`; timestamps are
-     * `int64`; everything unmatched falls back to `string` (option labels, text, static).
+     * An int-backed `select`, or a `multiselect` whose options live in `eav_attribute_option`
+     * (no source model, or the EAV `Table` source).
      *
      * @param Attribute $attribute
      */
-    private function resolveType(Attribute $attribute): string
+    public function isOptionAttribute(Attribute $attribute): bool
     {
+        $input = $attribute->getFrontendInput();
+        if ($input === 'select') {
+            return (string)$attribute->getBackendType() === 'int';
+        }
+        if ($input !== 'multiselect') {
+            return false;
+        }
+        $source = $attribute->getSourceModel();
+
+        return empty($source) || (is_string($source) && ltrim($source, '\\') === Table::class);
+    }
+
+    /**
+     * Typesense field type from the attribute's backend/frontend type.
+     *
+     * An option attribute is always `int32[]` (select too, so a composite can carry its children's
+     * values); a yes/no attribute is `int32` 0/1 (a `bool` field rejects `filter_by=x:1`); any other
+     * multiselect is `string[]`; timestamps are `int64`; everything unmatched falls back to `string`.
+     *
+     * @param Attribute $attribute
+     */
+    public function resolveType(Attribute $attribute): string
+    {
+        if ($this->isOptionAttribute($attribute)) {
+            return 'int32[]';
+        }
         if ($attribute->getFrontendInput() === 'multiselect') {
             return 'string[]';
         }
         if ($attribute->getFrontendInput() === 'boolean') {
-            return 'bool';
+            return 'int32';
         }
 
         return match ((string)$attribute->getBackendType()) {

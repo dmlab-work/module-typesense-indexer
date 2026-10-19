@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -38,14 +39,17 @@ class SearchableFieldsProvider implements SearchableFieldsProviderInterface
 
         $fields = [];
         foreach ($collection->getItems() as $attribute) {
-            if (!$this->policy->isSearchable($attribute)
-                || $this->policy->isContextScoped($attribute)
-                || !$this->policy->isStringType($attribute)
-            ) {
-                // A field is a valid `query_by` target only when it is searchable AND string-typed.
-                // Context-scoped codes (price/position) collapse to an empty-scope name no document
-                // fills, and Typesense rejects `query_by` on non-string fields — so a searchable
-                // numeric/select/bool attribute is skipped too, or every search request would fail.
+            if (!$this->policy->isSearchable($attribute) || $this->policy->isContextScoped($attribute)) {
+                // Context-scoped codes (price/position) collapse to an empty-scope name no document fills.
+                continue;
+            }
+            if ($this->policy->isOptionAttribute($attribute)) {
+                // Option ids are int32[]; the labels in `<code>_value` are what a shopper types.
+                $fields[$this->policy->labelFieldName($attribute)] = $this->policy->searchWeight($attribute);
+                continue;
+            }
+            if (!$this->policy->isStringType($attribute)) {
+                // Typesense rejects `query_by` on non-string fields — one would fail every search request.
                 continue;
             }
             $fields[$this->policy->resolveFieldName($attribute)] = $this->policy->searchWeight($attribute);

@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -58,11 +59,11 @@ class PriceDataProviderTest extends TestCase
         );
     }
 
-    public function testAddsAFinalPricePerCustomerGroupNamedForTheWebsite(): void
+    public function testAddsAMinPricePerCustomerGroupNamedForTheWebsite(): void
     {
         $provider = $this->provider([
-            ['entity_id' => 42, 'customer_group_id' => 0, 'final_price' => '19.9900'],
-            ['entity_id' => 42, 'customer_group_id' => 1, 'final_price' => '17.5000'],
+            ['entity_id' => 42, 'customer_group_id' => 0, 'min_price' => '19.9900'],
+            ['entity_id' => 42, 'customer_group_id' => 1, 'min_price' => '17.5000'],
         ], 1);
 
         $documents = $provider->addData(['42' => ['id' => '42']], 1);
@@ -74,12 +75,74 @@ class PriceDataProviderTest extends TestCase
     public function testFieldNameCarriesTheStoresWebsite(): void
     {
         $provider = $this->provider([
-            ['entity_id' => 42, 'customer_group_id' => 0, 'final_price' => '5.00'],
+            ['entity_id' => 42, 'customer_group_id' => 0, 'min_price' => '5.00'],
         ], 2);
 
         $documents = $provider->addData(['42' => ['id' => '42']], 1);
 
         self::assertSame(5.0, $documents['42']['price_0_2']);
+    }
+
+    public function testRoundsToTwoDecimals(): void
+    {
+        $provider = $this->provider([
+            ['entity_id' => 42, 'customer_group_id' => 0, 'min_price' => '19.995'],
+        ], 1);
+
+        $documents = $provider->addData(['42' => ['id' => '42']], 1);
+
+        self::assertSame(20.0, $documents['42']['price_0_1']);
+    }
+
+    public function testCompositeUsesMinPriceNotFinalPrice(): void
+    {
+        $provider = $this->provider([
+            ['entity_id' => 46, 'customer_group_id' => 0, 'final_price' => '0.0000', 'min_price' => '61.0000'],
+        ], 1);
+
+        $documents = $provider->addData(['46' => ['id' => '46']], 1);
+
+        self::assertSame(61.0, $documents['46']['price_0_1']);
+    }
+
+    public function testNullMinPriceIsSkipped(): void
+    {
+        $provider = $this->provider([
+            ['entity_id' => 42, 'customer_group_id' => 0, 'min_price' => null],
+            ['entity_id' => 42, 'customer_group_id' => 1, 'min_price' => '7.00'],
+        ], 1);
+
+        $documents = $provider->addData(['42' => ['id' => '42']], 1);
+
+        self::assertArrayNotHasKey('price_0_1', $documents['42']);
+        self::assertSame(7.0, $documents['42']['price_1_1']);
+    }
+
+    public function testSelectsMinPriceColumn(): void
+    {
+        $select = $this->createMock(Select::class);
+        $select->expects(self::once())->method('from')
+            ->with('catalog_product_index_price', ['entity_id', 'customer_group_id', 'min_price'])
+            ->willReturnSelf();
+        $select->method('where')->willReturnSelf();
+        $select->method('union')->willReturnSelf();
+
+        $connection = $this->createStub(AdapterInterface::class);
+        $connection->method('select')->willReturn($select);
+        $connection->method('fetchAll')->willReturn([]);
+        $resource = $this->createStub(ResourceConnection::class);
+        $resource->method('getConnection')->willReturn($connection);
+        $store = $this->createStub(StoreInterface::class);
+        $store->method('getWebsiteId')->willReturn(1);
+        $storeManager = $this->createStub(StoreManagerInterface::class);
+        $storeManager->method('getStore')->willReturn($store);
+        $tableResolver = $this->createStub(IndexScopeResolverInterface::class);
+        $tableResolver->method('resolve')->willReturn('catalog_product_index_price');
+        $dimensionFactory = $this->createStub(DimensionCollectionFactory::class);
+        $dimensionFactory->method('create')->willReturn(new MultiDimensionProvider());
+
+        (new PriceDataProvider($resource, $storeManager, new FieldNameResolver(), $tableResolver, $dimensionFactory))
+            ->addData(['42' => ['id' => '42']], 1);
     }
 
     public function testEmptyDocumentSetSkipsTheQuery(): void

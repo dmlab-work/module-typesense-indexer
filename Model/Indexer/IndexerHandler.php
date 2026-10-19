@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -12,7 +13,12 @@ use DmLab\TypesenseCore\Model\Collection\CollectionManager;
 use DmLab\TypesenseCore\Model\Client\HealthChecker;
 use DmLab\TypesenseCore\Model\Document\DocumentWriter;
 use DmLab\TypesenseCore\Model\Document\ImportResult;
+use DmLab\TypesenseCore\Model\Schema\Decision;
+use DmLab\TypesenseCore\Model\Schema\ReconcilePolicy;
 use DmLab\TypesenseIndexer\Model\Document\DocumentBuilder;
+use DmLab\TypesenseIndexer\Model\PublicCollection\PublicDocumentProjector;
+use DmLab\TypesenseIndexer\Model\Schema\CollectionSchemaSync;
+use DmLab\TypesenseIndexer\Model\Synonym\SynonymSync;
 use Magento\Catalog\Model\Category;
 use Magento\CatalogSearch\Model\Indexer\Fulltext;
 use Magento\CatalogSearch\Model\Indexer\Fulltext\Processor;
@@ -22,7 +28,9 @@ use Magento\Framework\Indexer\CacheContext;
 use Magento\Framework\Indexer\IndexStructureInterface;
 use Magento\Framework\Indexer\SaveHandler\Batch;
 use Magento\Framework\Indexer\SaveHandler\IndexerInterface;
+use Magento\Framework\Indexer\SaveHandler\StackedActionsIndexerInterface;
 use Magento\Framework\Phrase;
+use Magento\Store\Model\StoreManagerInterface;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -37,19 +45,27 @@ use Psr\Log\LoggerInterface;
  * the alias left behind. An incremental `saveIndex` (a single row, no preceding `cleanIndex`) has no
  * pending collection, so it upserts into the alias's live collection and does not swap.
  *
+ * Every write is mirrored into the public storefront collection (`<alias>_public`) as projected
+ * documents ({@see PublicDocumentProjector}); it is rebuilt, swapped and cleaned up alongside the main one.
+ *
  * Batch size comes from deployment config `indexer/batch_size/catalogsearch_fulltext/typesense_save`
  * (the ES convention, `elastic_save` → `typesense_save`), and the stream is chunked with Magento's
  * {@see Batch} so document building stays bounded regardless of catalog size.
  *
- * **`StackedActionsIndexerInterface` is deliberately not implemented.** That contract batches an
- * adapter's queued write queries (ES stacks bulk requests); core's {@see DocumentWriter} already
- * imports in bounded JSONL batches over one HTTP call each and exposes no query-stacking mode, so
- * there is nothing to stack — implementing it would only add empty enable/trigger hooks.
+ * Partial reindex is stacked ({@see StackedActionsIndexerInterface}): deletes are buffered, `saveIndex`
+ * upserts first and then deletes only the buffered ids it did not rebuild, so products never vanish
+ * between delete and upsert. Deletes go out as `id:[…]` filters in chunks of {@see self::DELETE_CHUNK_SIZE}.
+ *
+ * Attribute memos ({@see RunScopedCacheInterface}) are reset at the start of every `saveIndex`, so a
+ * long-running consumer sees attributes and options created since its previous run.
+ *
+ * A successful full rebuild also refreshes the store's synonym set ({@see SynonymSync}) and prunes
+ * versioned collections older than the new live one ({@see OrphanCollectionPruner}).
  *
  * @api
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  */
-class IndexerHandler implements IndexerInterface
+class IndexerHandler implements IndexerInterface, StackedActionsIndexerInterface
 {
     /**
      * Deployment-config prefix for per-indexer batch sizes, matching ES.
@@ -62,11 +78,28 @@ class IndexerHandler implements IndexerInterface
     private const BATCH_SIZE_KEY = 'typesense_save';
 
     /**
+     * Ids per `deleteBy` filter.
+     */
+    private const DELETE_CHUNK_SIZE = 100;
+
+    /**
      * Memoized batch size — deployment config is read once per instance, not once per batch.
      *
      * @var int|null
      */
     private ?int $resolvedBatchSize = null;
+
+    /**
+     * @var bool
+     */
+    private bool $stacked = false;
+
+    /**
+     * Buffered stacked deletes: alias ⇒ id ⇒ id.
+     *
+     * @var array<string,array<string,string>>
+     */
+    private array $stackedDeletes = [];
 
     /**
      * @param IndexStructureInterface $indexStructure fresh-collection lifecycle for `cleanIndex`
@@ -83,8 +116,14 @@ class IndexerHandler implements IndexerInterface
      * @param CacheContext $cacheContext category cache tags for scheduled reindex
      * @param Processor $processor tells us whether the indexer is scheduled
      * @param LoggerInterface $logger surfaces partial import failures
+     * @param PublicDocumentProjector $publicProjector main document → public document
+     * @param StoreManagerInterface $storeManager resolves the store's website for the public price
+     * @param SynonymSync $synonymSync refreshes the store's synonym set after a full rebuild
+     * @param OrphanCollectionPruner $pruner drops collections older than the freshly swapped one
+     * @param CollectionSchemaSync $schemaSync brings a pending collection's schema up to date before the swap
      * @param array<string,mixed> $data carries `indexer_id` from the handler factory
      * @param int $batchSize fallback batch size when deployment config is unset
+     * @param RunScopedCacheInterface[] $runScopedCaches attribute memos reset at the start of every run
      */
     public function __construct(
         private readonly IndexStructureInterface $indexStructure,
@@ -101,63 +140,160 @@ class IndexerHandler implements IndexerInterface
         private readonly CacheContext $cacheContext,
         private readonly Processor $processor,
         private readonly LoggerInterface $logger,
+        private readonly PublicDocumentProjector $publicProjector,
+        private readonly StoreManagerInterface $storeManager,
+        private readonly SynonymSync $synonymSync,
+        private readonly OrphanCollectionPruner $pruner,
+        private readonly CollectionSchemaSync $schemaSync,
         private readonly array $data = [],
-        private readonly int $batchSize = DocumentWriter::DEFAULT_BATCH_SIZE
+        private readonly int $batchSize = DocumentWriter::DEFAULT_BATCH_SIZE,
+        private readonly array $runScopedCaches = []
     ) {
     }
 
     /**
-     * Build the FAT documents for the scope, write them in batches, then swap the alias last.
+     * Build the FAT documents for the scope, write them (and their public projection) in batches, then swap last.
      *
      * @param \Magento\Framework\Search\Request\Dimension[] $dimensions
      * @param \Traversable<int|string,mixed> $documents id ⇒ raw index data
      * @return $this
-     * @throws LocalizedException when no scope dimension is present or no collection is available
+     * @throws LocalizedException when no scope dimension is present, no collection is available or the
+     *         schema changed during a full rebuild in a way it could not apply
      * @throws TypesenseException on a transport or HTTP failure
      */
     public function saveIndex($dimensions, \Traversable $documents)
     {
+        foreach ($this->runScopedCaches as $cache) {
+            $cache->reset();
+        }
+
         $storeId = $this->storeScopeResolver->resolve($dimensions);
         $alias = $this->nameResolver->getAliasName($this->getIndexerId(), $storeId);
+        $publicAlias = $this->nameResolver->getPublicAliasName($this->getIndexerId(), $storeId);
 
         $pending = $this->pendingCollections->get($alias);
-        $target = $pending ?? $this->resolveLiveCollection($alias);
-
-        $scheduled = $this->processor->getIndexer()->isScheduled();
+        $publicPending = $this->pendingCollections->get($publicAlias);
 
         $swapped = false;
+        $publicSwapped = false;
+        $unapplied = false;
         try {
+            $target = $pending ?? $this->resolveLiveCollection($alias);
+            $publicTarget = $publicPending ?? $this->resolvePublicCollection($publicAlias);
+            $websiteId = $publicTarget !== null
+                ? (int)$this->storeManager->getStore($storeId)->getWebsiteId()
+                : 0;
+
+            $scheduled = $this->processor->getIndexer()->isScheduled();
+
+            $builtIds = [];
             foreach ($this->batch->getItems($documents, $this->resolveBatchSize()) as $chunk) {
                 $built = $this->documentBuilder->build(new \ArrayIterator($chunk), $storeId);
                 if ($built === []) {
                     continue;
                 }
+                // Only stacked deletes consult the ids; a full rebuild would hold millions of them for nothing.
+                if ($this->stacked) {
+                    foreach (array_keys($built) as $id) {
+                        $builtIds[(string)$id] = true;
+                    }
+                }
 
                 $this->writeBatch($target, $built);
+                if ($publicTarget !== null) {
+                    $this->writeBatch($publicTarget, $this->project($built, $websiteId));
+                }
 
                 if ($scheduled) {
                     $this->registerCategoryCacheTags($built);
                 }
             }
 
-            // The alias moves only for a full rebuild; an incremental save wrote into the live collection.
+            if ($this->stacked) {
+                $this->consumeStackedDeletes($alias, $target, $builtIds);
+                $this->consumeStackedDeletes($publicAlias, $publicTarget, $builtIds);
+            }
+
+            // The aliases move only for a full rebuild; an incremental save wrote into the live collections.
+            // A flag change saved mid-rebuild patched only the old live collection: carry it over before the
+            // swap (no size threshold — nothing else writes to a pending collection) and re-check after it,
+            // since a save landing between the two still patched the old one.
             if ($pending !== null) {
+                $reconcile = fn (): Decision => $this->schemaSync->reconcileMain(
+                    $pending,
+                    $storeId,
+                    new ReconcilePolicy()
+                );
+                $unapplied = $this->warnIfUnapplied($pending, $reconcile()) || $unapplied;
                 $this->aliasManager->swap($alias, $pending);
                 $swapped = true;
+                $unapplied = $this->recheckSwapped($pending, $reconcile) || $unapplied;
+            }
+            if ($publicPending !== null) {
+                $reconcile = fn (): Decision => $this->schemaSync->reconcilePublic(
+                    $publicPending,
+                    $storeId,
+                    new ReconcilePolicy()
+                );
+                $unapplied = $this->warnIfUnapplied($publicPending, $reconcile()) || $unapplied;
+                $this->aliasManager->swap($publicAlias, $publicPending);
+                $publicSwapped = true;
+                $unapplied = $this->recheckSwapped($publicPending, $reconcile) || $unapplied;
             }
         } finally {
-            if ($pending !== null) {
-                // A rebuild that died before the swap leaves the pending collection orphaned — no alias
-                // targets it, so a later swap never retires it. Drop it (best-effort) to reclaim its RAM.
-                // But `swap()` repoints the alias *before* dropping the old collection: if that drop fails
-                // (a transient non-404), swap() throws with the alias already serving `$pending`. Dropping
-                // it then would destroy the now-live index — so only drop when the alias is not on it.
-                if (!$swapped && !$this->aliasTargets($alias, $pending)) {
-                    $this->dropPending($pending);
-                }
-                // Clear the entry even on failure, so a later incremental save in the same process does
-                // not write into the abandoned build and swap the alias onto it.
-                $this->pendingCollections->clear($alias);
+            $this->settlePending($alias, $pending, $swapped);
+            $this->settlePending($publicAlias, $publicPending, $publicSwapped);
+            // Never throw, so they run (and mask nothing) even when the public swap failed after the main one.
+            if ($swapped) {
+                $this->pruner->prune($alias, $pending);
+            }
+            if ($publicSwapped) {
+                $this->pruner->prune($publicAlias, $publicPending);
+            }
+            if ($swapped) {
+                $this->syncSynonyms($storeId);
+            }
+        }
+
+        // Fail the rebuild so Magento leaves the indexer invalid instead of marking it valid over a stale schema.
+        if ($unapplied) {
+            throw new LocalizedException(
+                new Phrase('The Typesense schema changed during the rebuild of store %1; reindex again.', [$storeId])
+            );
+        }
+
+        return $this;
+    }
+
+    /**
+     * Remove documents by id from the scope's live main and public collections (buffered while stacked).
+     *
+     * @param \Magento\Framework\Search\Request\Dimension[] $dimensions
+     * @param \Traversable<int|string,mixed> $documents ids to remove
+     * @return $this
+     * @throws LocalizedException when no scope dimension is present
+     * @throws TypesenseException on any failure other than a missing collection
+     */
+    public function deleteIndex($dimensions, \Traversable $documents)
+    {
+        $storeId = $this->storeScopeResolver->resolve($dimensions);
+        $aliases = [
+            $this->nameResolver->getAliasName($this->getIndexerId(), $storeId),
+            $this->nameResolver->getPublicAliasName($this->getIndexerId(), $storeId),
+        ];
+        $ids = $this->normalizeIds($documents);
+        if ($ids === []) {
+            return $this;
+        }
+
+        foreach ($aliases as $alias) {
+            if ($this->stacked) {
+                $this->stackedDeletes[$alias] = ($this->stackedDeletes[$alias] ?? []) + $ids;
+                continue;
+            }
+            $target = $this->aliasManager->resolve($alias);
+            if ($target !== null) {
+                $this->deleteIds($target, $ids);
             }
         }
 
@@ -165,32 +301,39 @@ class IndexerHandler implements IndexerInterface
     }
 
     /**
-     * Remove documents by id from the scope's live collection; a 404 per id is the wanted state.
-     *
-     * @param \Magento\Framework\Search\Request\Dimension[] $dimensions
-     * @param \Traversable<int|string,mixed> $documents ids to remove
-     * @return $this
-     * @throws LocalizedException when no scope dimension is present
-     * @throws TypesenseException on any failure other than a missing document
+     * @inheritdoc
      */
-    public function deleteIndex($dimensions, \Traversable $documents)
+    public function enableStackedActions(): void
     {
-        $storeId = $this->storeScopeResolver->resolve($dimensions);
-        $alias = $this->nameResolver->getAliasName($this->getIndexerId(), $storeId);
+        $this->stacked = true;
+        $this->stackedDeletes = [];
+    }
 
-        $target = $this->aliasManager->resolve($alias);
-        if ($target === null) {
-            return $this;
-        }
-
-        foreach ($documents as $documentId) {
-            if ($documentId === null || $documentId === '') {
-                continue;
+    /**
+     * Flush the deletes no `saveIndex` consumed.
+     *
+     * @return void
+     * @throws TypesenseException on any failure other than a missing collection
+     */
+    public function triggerStackedActions(): void
+    {
+        $pending = $this->stackedDeletes;
+        $this->stackedDeletes = [];
+        foreach ($pending as $alias => $ids) {
+            $target = $this->aliasManager->resolve($alias);
+            if ($target !== null) {
+                $this->deleteIds($target, $ids);
             }
-            $this->deleteOne($target, (string)$documentId);
         }
+    }
 
-        return $this;
+    /**
+     * @inheritdoc
+     */
+    public function disableStackedActions(): void
+    {
+        $this->stacked = false;
+        $this->stackedDeletes = [];
     }
 
     /**
@@ -249,6 +392,109 @@ class IndexerHandler implements IndexerInterface
     }
 
     /**
+     * Project built main documents onto the public collection.
+     *
+     * @param array<string,array<string,mixed>> $documents
+     * @param int $websiteId
+     * @return array<string,array<string,mixed>>
+     */
+    private function project(array $documents, int $websiteId): array
+    {
+        $projected = [];
+        foreach ($documents as $id => $document) {
+            $projected[$id] = $this->publicProjector->project($document, $websiteId);
+        }
+
+        return $projected;
+    }
+
+    /**
+     * Reconcile a just-swapped collection again; it is live, so a failure is logged, never thrown.
+     *
+     * A failed check counts as unapplied: the schema cannot be confirmed, so the rebuild must not pass as valid.
+     *
+     * @param string $collection
+     * @param callable():Decision $reconcile
+     * @return bool whether the schema change was left unapplied (or could not be checked)
+     */
+    private function recheckSwapped(string $collection, callable $reconcile): bool
+    {
+        try {
+            return $this->warnIfUnapplied($collection, $reconcile());
+        } catch (TypesenseException $e) {
+            $this->logger->error(
+                sprintf('Typesense indexer: post-swap schema check of "%s" failed — %s', $collection, $e->getMessage())
+            );
+
+            return true;
+        }
+    }
+
+    /**
+     * Log a pending collection whose mid-rebuild schema drift a PATCH could not apply.
+     *
+     * @param string $collection
+     * @param Decision $decision
+     * @return bool whether the decision left the change unapplied
+     */
+    private function warnIfUnapplied(string $collection, Decision $decision): bool
+    {
+        if (!$decision->needsRebuild()) {
+            return false;
+        }
+        $this->logger->warning(
+            sprintf(
+                'Typesense indexer: schema of "%s" changed during the rebuild and needs another one — %s',
+                $collection,
+                (string)$decision->getReason()
+            )
+        );
+
+        return true;
+    }
+
+    /**
+     * Refresh the store's synonym set after a full rebuild; a failure never fails the reindex.
+     *
+     * @param int $storeId
+     */
+    private function syncSynonyms(int $storeId): void
+    {
+        try {
+            $this->synonymSync->syncStore($storeId);
+        } catch (\Exception $e) {
+            $this->logger->error(
+                sprintf('Typesense indexer: synonym sync failed for store %d.', $storeId),
+                ['exception' => $e]
+            );
+        }
+    }
+
+    /**
+     * Retire an alias's pending collection after `saveIndex`: drop it unless it is (or may be) live.
+     *
+     * A rebuild that died before the swap leaves the pending collection orphaned — no alias targets it,
+     * so a later swap never retires it; dropping it reclaims its RAM. But `swap()` repoints the alias
+     * *before* dropping the old collection: if that drop fails, swap() throws with the alias already
+     * serving `$pending`, so it is only dropped when the alias is not on it. The entry is cleared even on
+     * failure, so a later incremental save in the same process does not write into the abandoned build.
+     *
+     * @param string $alias
+     * @param string|null $pending
+     * @param bool $swapped
+     */
+    private function settlePending(string $alias, ?string $pending, bool $swapped): void
+    {
+        if ($pending === null) {
+            return;
+        }
+        if (!$swapped && !$this->aliasTargets($alias, $pending)) {
+            $this->dropPending($pending);
+        }
+        $this->pendingCollections->clear($alias);
+    }
+
+    /**
      * Drop an orphaned pending collection after a failed rebuild — never mask the original failure.
      *
      * Runs from the `finally` of a failing `saveIndex`, so it must not throw: a drop failure is logged
@@ -291,21 +537,62 @@ class IndexerHandler implements IndexerInterface
     }
 
     /**
-     * Delete one document, treating a 404 as the desired end state.
+     * Delete the alias's buffered ids that the save did not rebuild, then drop the buffer.
+     *
+     * @param string $alias
+     * @param string|null $collection null when the alias has no collection to delete from
+     * @param array<string,true> $builtIds
+     * @throws TypesenseException on any failure other than a missing collection
+     */
+    private function consumeStackedDeletes(string $alias, ?string $collection, array $builtIds): void
+    {
+        $ids = array_diff_key($this->stackedDeletes[$alias] ?? [], $builtIds);
+        unset($this->stackedDeletes[$alias]);
+        if ($collection !== null && $ids !== []) {
+            $this->deleteIds($collection, $ids);
+        }
+    }
+
+    /**
+     * Delete ids in `id:[…]` filter chunks; a 404 (collection gone) is the wanted state.
      *
      * @param string $collection
-     * @param string $documentId
-     * @throws TypesenseException on any failure other than a missing document
+     * @param array<string,string> $ids
+     * @throws TypesenseException on any failure other than a missing collection
      */
-    private function deleteOne(string $collection, string $documentId): void
+    private function deleteIds(string $collection, array $ids): void
     {
-        try {
-            $this->documentWriter->delete($collection, $documentId);
-        } catch (TypesenseException $e) {
-            if ($e->getStatusCode() !== 404) {
-                throw $e;
+        foreach (array_chunk(array_values($ids), self::DELETE_CHUNK_SIZE) as $chunk) {
+            try {
+                $this->documentWriter->deleteBy($collection, 'id:[' . implode(',', $chunk) . ']');
+            } catch (TypesenseException $e) {
+                if ($e->getStatusCode() !== 404) {
+                    throw $e;
+                }
             }
         }
+    }
+
+    /**
+     * Ids as numeric strings, deduplicated; anything else could break the filter syntax.
+     *
+     * @param \Traversable<int|string,mixed> $documents
+     * @return array<string,string> id ⇒ id
+     */
+    private function normalizeIds(\Traversable $documents): array
+    {
+        $ids = [];
+        foreach ($documents as $documentId) {
+            if (!is_scalar($documentId)) {
+                continue;
+            }
+            $id = (string)$documentId;
+            if (preg_match('/^\d+$/', $id) === 1) {
+                $ids[$id] = $id;
+            }
+        }
+
+        return $ids;
     }
 
     /**
@@ -369,6 +656,30 @@ class IndexerHandler implements IndexerInterface
                 new Phrase(
                     'No Typesense collection is available for alias "%1"; run a full reindex first.',
                     [$alias]
+                )
+            );
+        }
+
+        return $target;
+    }
+
+    /**
+     * The live public collection, or null (with a warning) when the alias is unset.
+     *
+     * A store indexed before the public collection existed has no public alias until its next full
+     * reindex; the main write must still go through.
+     *
+     * @param string $alias
+     * @throws TypesenseException
+     */
+    private function resolvePublicCollection(string $alias): ?string
+    {
+        $target = $this->aliasManager->resolve($alias);
+        if ($target === null) {
+            $this->logger->warning(
+                sprintf(
+                    'Typesense indexer: public alias "%s" is unset, skipping its write; run a full reindex.',
+                    $alias
                 )
             );
         }

@@ -2,6 +2,7 @@
 <!--
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -143,8 +144,7 @@
                        showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Reindex on Attribute Change</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                    <comment>Escape hatch. When Yes, an attribute flag change invalidates the whole fulltext
-                        index (native Magento behaviour) instead of applying an in-place schema patch.</comment>
+                    <comment>Escape hatch. When Yes, attribute create, delete and flag changes invalidate the whole fulltext index (native Magento behaviour) instead of applying an in-place schema patch.</comment>
                 </field>
             </group>
         </section>

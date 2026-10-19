@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -94,6 +95,21 @@ class AttributeFieldProviderTest extends TestCase
         self::assertSame([], $provider->getFields(1));
     }
 
+    public function testNeverEmitsARegexFieldName(): void
+    {
+        // `price_[0-9]+_.*` / `position_category_.*` belong to their dedicated providers only.
+        $provider = $this->provider([
+            $this->attribute(['code' => 'price', 'filterable' => 1, 'sort' => 1, 'backend' => 'decimal',
+                'frontend' => 'price']),
+            $this->attribute(['code' => 'position', 'sort' => 1, 'backend' => 'int']),
+            $this->attribute(['code' => 'color', 'filterable' => 1]),
+        ]);
+
+        foreach ($provider->getFields(1) as $spec) {
+            self::assertStringNotContainsString('.*', $spec->getName());
+        }
+    }
+
     public function testSkipsBaseCodesOwnedByStaticFieldProvider(): void
     {
         // sku/status/visibility are declared by StaticFieldProvider; re-emitting them here would make
@@ -108,6 +124,53 @@ class AttributeFieldProviderTest extends TestCase
         $names = array_map(static fn (FieldSpec $f) => $f->getName(), $provider->getFields(1));
 
         self::assertSame(['color'], $names);
+    }
+
+    public function testSearchableOptionAttributeDeclaresItsLabelField(): void
+    {
+        $provider = $this->provider([
+            $this->attribute(['code' => 'manufacturer', 'searchable' => 1, 'frontend' => 'select',
+                'backend' => 'int']),
+            $this->attribute(['code' => 'color', 'filterable' => 1, 'frontend' => 'select', 'backend' => 'int']),
+        ]);
+
+        $byName = [];
+        foreach ($provider->getFields(1) as $spec) {
+            $byName[$spec->getName()] = $spec->toArray();
+        }
+
+        self::assertSame(['manufacturer_value', 'color'], array_keys($byName));
+        self::assertSame(
+            ['name' => 'manufacturer_value', 'type' => 'string[]', 'index' => true, 'optional' => true],
+            $byName['manufacturer_value']
+        );
+    }
+
+    public function testSortableOptionAttributeDeclaresOnlyItsSortLabelField(): void
+    {
+        // The int32[] id field is never sortable; sorting goes through `sort_<code>`.
+        $provider = $this->provider([
+            $this->attribute(['code' => 'manufacturer', 'sort' => 1, 'frontend' => 'select', 'backend' => 'int']),
+            $this->attribute(['code' => 'color', 'frontend' => 'select', 'backend' => 'int']),
+        ]);
+
+        $fields = array_map(static fn (FieldSpec $f) => $f->toArray(), $provider->getFields(1));
+
+        self::assertSame(
+            [['name' => 'sort_manufacturer', 'type' => 'string', 'sort' => true, 'optional' => true]],
+            $fields
+        );
+    }
+
+    public function testNonOptionAttributeHasNoLabelFields(): void
+    {
+        $provider = $this->provider([
+            $this->attribute(['code' => 'name', 'searchable' => 1, 'sort' => 1]),
+        ]);
+
+        $names = array_map(static fn (FieldSpec $f) => $f->getName(), $provider->getFields(1));
+
+        self::assertSame(['name'], $names);
     }
 
     public function testEmptyCollectionYieldsNoFields(): void

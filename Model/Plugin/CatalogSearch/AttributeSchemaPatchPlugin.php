@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -24,9 +25,9 @@ use Magento\Framework\Model\AbstractModel;
  * invalidation and reconcile the schema in place instead — while still performing its other duties
  * (reset the search-request config, mark the searchable list stale) via {@see AttributeSaveHandler}.
  *
- * A **new** attribute is the exception: its column is in no document, so we invalidate to write it.
- * Newness is captured in the before phase ({@see AttributeSaveContext}) because `afterSave` never
- * receives the attribute.
+ * A **new** attribute has no product values yet, so declaring its fields is a PATCH too; a deleted one
+ * is dropped by the same PATCH. Neither invalidates unless core answers `needs-rebuild`. Save state is
+ * captured in the before phase ({@see AttributeSaveContext}) because `afterSave` never receives the attribute.
  *
  * @see AttributeSaveHandler for the active/inactive gate and the reconcile-or-invalidate logic.
  */
@@ -46,8 +47,9 @@ class AttributeSchemaPatchPlugin
 
     /**
      * Capture what the after phase needs before the attribute is saved — `afterSave` cannot see it:
-     * whether the attribute is new, and (for an existing one) whether a schema-relevant flag changed.
-     * Both must be read here while the attribute and its dirty-field state are still available.
+     * whether the attribute is new, whether it touches the schema (a new one: any schema flag set;
+     * an existing one: a schema flag changed) and whether its labels just became public. Read here
+     * while the dirty-field state is still available.
      *
      * @param NativeAttributePlugin $subject the wrapped native plugin
      * @param AttributeResourceModel $attributeResource the save target (the native plugin's subject)
@@ -60,10 +62,12 @@ class AttributeSchemaPatchPlugin
         AttributeResourceModel $attributeResource,
         AbstractModel $attribute
     ): void {
+        $isNew = $attribute->isObjectNew();
         $this->saveContext->push(
-            $attribute->isObjectNew(),
-            $this->policy->schemaFlagsChanged($attribute),
-            $this->policy->searchConfigChanged($attribute)
+            $isNew,
+            $isNew ? $this->policy->schemaFlagsSet($attribute) : $this->policy->schemaFlagsChanged($attribute),
+            $this->policy->searchConfigChanged($attribute),
+            !$isNew && $this->policy->optionLabelsBecameExposed($attribute)
         );
     }
 
@@ -71,10 +75,11 @@ class AttributeSchemaPatchPlugin
      * When the Typesense flow is active, replace the native invalidation with an in-place PATCH.
      *
      * The state captured in {@see beforeBeforeSave} is always consumed to keep the stack balanced,
-     * regardless of which branch handles the save. An existing save that changed no schema-relevant
-     * flag (a label, a default value, sort order) is a no-op — skipping it avoids the per-store
-     * reconcile round-trips the native plugin would also skip. A save that changed only a search-config
-     * flag (`is_visible_in_advanced_search`) still refreshes the request config, matching native.
+     * regardless of which branch handles the save. A save that touches no schema-relevant flag skips
+     * the per-store reconcile round-trips; a new attribute, or a change of a search-config flag only
+     * (`is_visible_in_advanced_search`), still refreshes the request config, matching native. An option
+     * attribute that just became storefront-exposed invalidates the index (its public labels need a reindex),
+     * even under the escape hatch, since native does not gate on every exposure flag.
      *
      * @param NativeAttributePlugin $subject the wrapped native plugin
      * @param \Closure $proceed the native `afterSave`
@@ -90,17 +95,45 @@ class AttributeSchemaPatchPlugin
     ): AttributeResourceModel {
         $state = $this->saveContext->pop();
 
+        if ($state['exposeLabels']) {
+            $this->handler->handleLabelsExposed();
+        }
+
         if (!$this->handler->isActive()) {
             return $proceed($attributeResource, $result);
         }
 
-        if ($state['isNew']) {
-            $this->handler->handleNewAttributeSave();
-        } elseif ($state['reconcile']) {
-            $this->handler->handleExistingAttributeSave();
-        } elseif ($state['refreshConfig']) {
+        if ($state['reconcile']) {
+            $this->handler->handleAttributeSave();
+        } elseif ($state['isNew'] || $state['refreshConfig']) {
             $this->handler->refreshSearchConfig();
         }
+
+        return $result;
+    }
+
+    /**
+     * When the Typesense flow is active, replace the native delete invalidation with an in-place PATCH.
+     *
+     * The PATCH drops the deleted attribute's fields.
+     *
+     * @param NativeAttributePlugin $subject the wrapped native plugin
+     * @param \Closure $proceed the native `afterDelete`
+     * @param AttributeResourceModel $attributeResource the native plugin's subject
+     * @param AttributeResourceModel $result the native plugin's return value (the resource model)
+     * @return AttributeResourceModel
+     */
+    public function aroundAfterDelete(
+        NativeAttributePlugin $subject,
+        \Closure $proceed,
+        AttributeResourceModel $attributeResource,
+        AttributeResourceModel $result
+    ): AttributeResourceModel {
+        if (!$this->handler->isActive()) {
+            return $proceed($attributeResource, $result);
+        }
+
+        $this->handler->handleAttributeDelete();
 
         return $result;
     }

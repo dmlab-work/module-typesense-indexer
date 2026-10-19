@@ -2,6 +2,7 @@
 <!--
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -95,6 +96,13 @@
                 <item name="attribute" xsi:type="object">
                     DmLab\TypesenseIndexer\Model\Document\Provider\AttributeDataProvider
                 </item>
+                <!-- after `attribute`: merges children into the parent's own option ids; labels read the result -->
+                <item name="children" xsi:type="object">
+                    DmLab\TypesenseIndexer\Model\Document\Provider\ChildAttributeDataProvider
+                </item>
+                <item name="labels" xsi:type="object">
+                    DmLab\TypesenseIndexer\Model\Document\Provider\OptionLabelDataProvider
+                </item>
                 <item name="category" xsi:type="object">
                     DmLab\TypesenseIndexer\Model\Document\Provider\CategoryDataProvider
                 </item>
@@ -104,6 +112,18 @@
                 <item name="stock" xsi:type="object">
                     DmLab\TypesenseIndexer\Model\Document\Provider\StockDataProvider
                 </item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!-- Attribute memos the handler drops at the start of every index run (attributes created since are seen). -->
+    <type name="DmLab\TypesenseIndexer\Model\Indexer\IndexerHandler">
+        <arguments>
+            <argument name="runScopedCaches" xsi:type="array">
+                <item name="typeMap" xsi:type="object">DmLab\TypesenseIndexer\Model\Schema\AttributeTypeMap</item>
+                <item name="optionAttributes" xsi:type="object">DmLab\TypesenseIndexer\Model\Schema\OptionAttributeList</item>
+                <item name="attributeData" xsi:type="object">DmLab\TypesenseIndexer\Model\Document\Provider\AttributeDataProvider</item>
+                <item name="optionLabels" xsi:type="object">DmLab\TypesenseIndexer\Model\Document\Provider\OptionLabelDataProvider</item>
             </argument>
         </arguments>
     </type>
@@ -119,14 +139,42 @@
                 type="DmLab\TypesenseIndexer\Model\Plugin\CatalogSearch\AttributeSchemaPatchPlugin"/>
     </type>
 
-    <!--
-        Neutralise the native Elasticsearch attribute plugin. It throws when the created handler is not
-        an ElasticsearchIndexerHandler, and its gate (`isElasticsearchEnabled`) is true for us because
-        `typesense` is in the engine list. Registered unconditionally, gates itself at runtime on the
-        current engine — never `disabled="true"`, which would break a switch back to ES/OpenSearch.
-    -->
-    <type name="Magento\Elasticsearch\Model\Indexer\Fulltext\Plugin\Category\Product\Attribute">
-        <plugin name="dmlab_typesense_indexer_neutralise_es_attribute"
-                type="DmLab\TypesenseIndexer\Model\Plugin\Elasticsearch\AttributeIndexerNeutralizePlugin"/>
+    <!-- The reconciler diffs the schema snapshot CollectionSchemaSync pinned (same shared instance). -->
+    <virtualType name="DmLab\TypesenseIndexer\Model\Schema\SnapshotReconciler"
+                 type="DmLab\TypesenseCore\Model\Schema\Reconciler">
+        <arguments>
+            <argument name="collections" xsi:type="object">DmLab\TypesenseIndexer\Model\Schema\SchemaSnapshotCollectionManager</argument>
+        </arguments>
+    </virtualType>
+    <type name="DmLab\TypesenseIndexer\Model\Schema\CollectionSchemaSync">
+        <arguments>
+            <argument name="reconciler" xsi:type="object">DmLab\TypesenseIndexer\Model\Schema\SnapshotReconciler</argument>
+        </arguments>
+    </type>
+
+    <!-- An attribute save that invalidated the index mid-reindexAll() must outlive the run marking itself valid. -->
+    <type name="Magento\Framework\Indexer\IndexerInterface">
+        <plugin name="dmlab_typesense_indexer_reindex_all_invalidation"
+                type="DmLab\TypesenseIndexer\Model\Plugin\Indexer\ReindexAllInvalidationPlugin"/>
+    </type>
+
+    <!-- Native synonym group save/delete → resync every store's Typesense synonym set. -->
+    <type name="Magento\Search\Model\SynonymGroupRepository">
+        <plugin name="dmlab_typesense_indexer_synonym_sync"
+                type="DmLab\TypesenseIndexer\Model\Plugin\Search\SynonymGroupRepositoryPlugin"/>
+    </type>
+
+    <!-- Store view delete (directly or with its website/group) → drop its collections, aliases and synonym set. -->
+    <type name="Magento\Store\Model\ResourceModel\Store">
+        <plugin name="dmlab_typesense_indexer_store_delete_cleanup"
+                type="DmLab\TypesenseIndexer\Model\Plugin\Store\StoreDeletePlugin"/>
+    </type>
+    <type name="Magento\Store\Model\ResourceModel\Group">
+        <plugin name="dmlab_typesense_indexer_store_delete_cleanup"
+                type="DmLab\TypesenseIndexer\Model\Plugin\Store\StoreParentDeletePlugin"/>
+    </type>
+    <type name="Magento\Store\Model\ResourceModel\Website">
+        <plugin name="dmlab_typesense_indexer_store_delete_cleanup"
+                type="DmLab\TypesenseIndexer\Model\Plugin\Store\StoreParentDeletePlugin"/>
     </type>
 </config>

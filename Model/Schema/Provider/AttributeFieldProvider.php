@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -18,7 +19,8 @@ use Magento\Catalog\Model\ResourceModel\Product\Attribute\CollectionFactory;
  * attribute with no `is_searchable` / `is_filterable` / `used_for_sort_by` produces no
  * `index`/`facet`/`sort`, so declaring it would spend RAM for nothing. Its *value* is
  * still written to every document by the document builder (the FAT rule); this is the
- * THIN half.
+ * THIN half. A searchable or sortable option attribute also declares its label fields
+ * (`<code>_value`, `sort_<code>`).
  */
 class AttributeFieldProvider implements FieldProviderInterface
 {
@@ -45,15 +47,14 @@ class AttributeFieldProvider implements FieldProviderInterface
                 // price/position fan out per scope — their dedicated provider owns those fields.
                 continue;
             }
-            if (in_array((string)$attribute->getAttributeCode(), StaticFieldProvider::OWNED_FIELDS, true)) {
-                // sku/status/visibility are base fields StaticFieldProvider already declares — re-emitting
-                // them would make the dedup order-dependent and could flip sku's `optional` false→true.
-                continue;
-            }
+            // sku/status/visibility are base fields StaticFieldProvider already declares — re-emitting
+            // them would make the dedup order-dependent and could flip sku's `optional` false→true.
+            $owned = in_array((string)$attribute->getAttributeCode(), StaticFieldProvider::OWNED_FIELDS, true);
             $spec = $this->policy->toFieldSpec($attribute);
-            if ($this->declaresField($spec)) {
+            if (!$owned && $this->declaresField($spec)) {
                 $fields[] = $spec;
             }
+            array_push($fields, ...$this->policy->toLabelFieldSpecs($attribute));
         }
 
         return $fields;

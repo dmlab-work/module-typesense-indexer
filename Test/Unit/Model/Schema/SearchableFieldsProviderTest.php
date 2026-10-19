@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -31,13 +32,17 @@ class SearchableFieldsProviderTest extends TestCase
         // PHPUnit-12 helper mocks it via reflection.
         $attribute = $this->createPartialMockWithReflection(
             Attribute::class,
-            ['getAttributeCode', 'getIsSearchable', 'getSearchWeight', 'getFrontendInput', 'getBackendType']
+            [
+                'getAttributeCode', 'getIsSearchable', 'getSearchWeight', 'getFrontendInput', 'getBackendType',
+                'getSourceModel',
+            ]
         );
         $attribute->method('getAttributeCode')->willReturn($data['code'] ?? 'attr');
         $attribute->method('getIsSearchable')->willReturn($data['searchable'] ?? 0);
         $attribute->method('getSearchWeight')->willReturn($data['weight'] ?? 0);
         $attribute->method('getFrontendInput')->willReturn($data['input'] ?? 'text');
         $attribute->method('getBackendType')->willReturn($data['backend'] ?? 'varchar');
+        $attribute->method('getSourceModel')->willReturn($data['source'] ?? null);
 
         return $attribute;
     }
@@ -99,20 +104,46 @@ class SearchableFieldsProviderTest extends TestCase
         self::assertSame(['name' => 5], $provider->get(1));
     }
 
+    public function testNeverReturnsARegexFieldName(): void
+    {
+        $provider = $this->provider([
+            $this->attribute(['code' => 'price', 'searchable' => 1, 'input' => 'text', 'backend' => 'varchar']),
+            $this->attribute(['code' => 'position', 'searchable' => 1, 'input' => 'text', 'backend' => 'varchar']),
+            $this->attribute(['code' => 'name', 'searchable' => 1]),
+        ]);
+
+        self::assertSame(['name' => 1], $provider->get(1));
+    }
+
     public function testNonStringSearchableAttributesAreExcluded(): void
     {
-        // Typesense only allows string/string[] fields in `query_by`; a searchable numeric, select
-        // or boolean attribute maps to float/int32/bool and would make every search request fail, so
-        // it is omitted even though it is searchable. A multiselect (string[]) stays.
+        // Typesense only allows string/string[] fields in `query_by`; a searchable numeric or boolean
+        // attribute would make every search request fail, so it is omitted. An option attribute is
+        // searched through its `<code>_value` labels; a custom-source multiselect (string[]) stays.
         $provider = $this->provider([
             $this->attribute(['code' => 'name', 'searchable' => 1, 'weight' => 5]),
             $this->attribute(['code' => 'weight_kg', 'searchable' => 1, 'weight' => 2, 'backend' => 'decimal']),
             $this->attribute(['code' => 'qty_int', 'searchable' => 1, 'weight' => 2, 'backend' => 'int']),
             $this->attribute(['code' => 'in_stock', 'searchable' => 1, 'weight' => 2, 'input' => 'boolean']),
-            $this->attribute(['code' => 'tags', 'searchable' => 1, 'weight' => 3, 'input' => 'multiselect']),
+            $this->attribute(['code' => 'colors', 'searchable' => 1, 'weight' => 3, 'input' => 'multiselect']),
+            $this->attribute([
+                'code' => 'tags', 'searchable' => 1, 'weight' => 3, 'input' => 'multiselect',
+                'source' => 'Vendor\\Module\\Model\\Source\\Tags',
+            ]),
         ]);
 
-        self::assertSame(['name' => 5, 'tags' => 3], $provider->get(1));
+        self::assertSame(['name' => 5, 'colors_value' => 3, 'tags' => 3], $provider->get(1));
+    }
+
+    public function testOptionAttributeIsSearchedThroughItsLabelField(): void
+    {
+        $provider = $this->provider([
+            $this->attribute(['code' => 'manufacturer', 'searchable' => 1, 'weight' => 4, 'input' => 'select',
+                'backend' => 'int']),
+            $this->attribute(['code' => 'color', 'searchable' => 0, 'input' => 'select', 'backend' => 'int']),
+        ]);
+
+        self::assertSame(['manufacturer_value' => 4], $provider->get(1));
     }
 
     public function testWeightsAreCarriedPerStore(): void

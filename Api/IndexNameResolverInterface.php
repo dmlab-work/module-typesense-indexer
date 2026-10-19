@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -24,4 +25,12 @@ interface IndexNameResolverInterface
      * @param int $storeId
      */
     public function getAliasName(string $indexerId, int $storeId): string;
+
+    /**
+     * The alias of the public storefront collection (`<alias>_public`): no customer-group prices.
+     *
+     * @param string $indexerId e.g. `catalogsearch_fulltext`
+     * @param int $storeId
+     */
+    public function getPublicAliasName(string $indexerId, int $storeId): string;
 }

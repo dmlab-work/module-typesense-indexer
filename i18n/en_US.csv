@@ -1,0 +1,41 @@
+"Typesense Server Hostname","Typesense Server Hostname"
+"Typesense Server Port","Typesense Server Port"
+"Typesense Index Prefix","Typesense Index Prefix"
+"Typesense API Key","Typesense API Key"
+"Typesense admin API key. Typesense authenticates with a single API key
+                        (not a username/password). Never exported by config:dump.","Typesense admin API key. Typesense authenticates with a single API key
+                        (not a username/password). Never exported by config:dump."
+"Typesense Server Timeout","Typesense Server Timeout"
+"Typesense Protocol","Typesense Protocol"
+"Typesense Additional Nodes","Typesense Additional Nodes"
+"Optional comma-separated <code>host:port</code> list for a
+                        high-availability cluster, tried after the primary server. Leave empty for a
+                        single node. Example: <code>typesense-2:8108,typesense-3:8108</code>.","Optional comma-separated <code>host:port</code> list for a
+                        high-availability cluster, tried after the primary server. Leave empty for a
+                        single node. Example: <code>typesense-2:8108,typesense-3:8108</code>."
+"Typesense Operation Timeout","Typesense Operation Timeout"
+"Seconds allowed for a bulk import or a schema change, which answer only once
+                        the work is done. Raise it for large collections.","Seconds allowed for a bulk import or a schema change, which answer only once
+                        the work is done. Raise it for large collections."
+"Typesense Retry Count","Typesense Retry Count"
+"Retries per request after the node list is exhausted.","Retries per request after the node list is exhausted."
+"Typesense Health Cache TTL","Typesense Health Cache TTL"
+"Seconds a health-check result is cached. Keep low; 0 disables caching.","Seconds a health-check result is cached. Keep low; 0 disables caching."
+"DMLab","DMLab"
+"Typesense","Typesense"
+"Schema Changes","Schema Changes"
+"Rebuild Threshold","Rebuild Threshold"
+"Document count above which a schema change is answered with a rebuild instead of an
+                        in-place patch, which blocks writes while it runs. 0 disables the size rule.","Document count above which a schema change is answered with a rebuild instead of an
+                        in-place patch, which blocks writes while it runs. 0 disables the size rule."
+"Decision Override","Decision Override"
+"Forces the decision regardless of collection size and type compatibility.","Forces the decision regardless of collection size and type compatibility."
+"Catalog Indexing","Catalog Indexing"
+"Reindex on Attribute Change","Reindex on Attribute Change"
+"Escape hatch. When Yes, attribute create, delete and flag changes invalidate the whole fulltext index (native Magento behaviour) instead of applying an in-place schema patch.","Escape hatch. When Yes, attribute create, delete and flag changes invalidate the whole fulltext index (native Magento behaviour) instead of applying an in-place schema patch."
+"Automatic (size and type compatibility)","Automatic (size and type compatibility)"
+"Always patch in place","Always patch in place"
+"Always rebuild","Always rebuild"
+"No Typesense collection is available for alias ""%1""; run a full reindex first.","No Typesense collection is available for alias ""%1""; run a full reindex first."
+"A store scope dimension is required to resolve the Typesense collection.","A store scope dimension is required to resolve the Typesense collection."
+"The Typesense schema changed during the rebuild of store %1; reindex again.","The Typesense schema changed during the rebuild of store %1; reindex again."

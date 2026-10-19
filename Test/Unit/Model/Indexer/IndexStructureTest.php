@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -15,6 +16,7 @@ use DmLab\TypesenseIndexer\Model\Indexer\IndexNameResolver;
 use DmLab\TypesenseIndexer\Model\Indexer\IndexStructure;
 use DmLab\TypesenseIndexer\Model\Indexer\PendingCollectionRegistry;
 use DmLab\TypesenseIndexer\Model\Indexer\StoreScopeResolver;
+use DmLab\TypesenseIndexer\Model\PublicCollection\PublicSchemaBuilder;
 use DmLab\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
 use DmLab\TypesenseIndexer\Model\Schema\FieldProviderInterface;
 use Magento\Framework\App\ScopeInterface;
@@ -22,6 +24,7 @@ use Magento\Framework\App\ScopeResolverInterface;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Search\Request\Dimension;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 
 class IndexStructureTest extends TestCase
 {
@@ -39,6 +42,12 @@ class IndexStructureTest extends TestCase
     /** @var PendingCollectionRegistry */
     private PendingCollectionRegistry $pendingCollections;
 
+    /** @var PublicSchemaBuilder */
+    private PublicSchemaBuilder $publicSchemaBuilder;
+
+    /** @var LoggerInterface */
+    private LoggerInterface $logger;
+
     protected function setUp(): void
     {
         // Stubs by default; a test escalates one to a mock (createMock) only where it verifies calls.
@@ -46,6 +55,9 @@ class IndexStructureTest extends TestCase
         $this->aliasManager = $this->createStub(AliasManager::class);
         $this->collectionManager = $this->createStub(CollectionManager::class);
         $this->pendingCollections = new PendingCollectionRegistry();
+        $this->publicSchemaBuilder = $this->createStub(PublicSchemaBuilder::class);
+        $this->publicSchemaBuilder->method('build')->willReturn([new FieldSpec('name', 'string', index: true)]);
+        $this->logger = $this->createStub(LoggerInterface::class);
     }
 
     /**
@@ -82,7 +94,9 @@ class IndexStructureTest extends TestCase
             $this->aliasManager,
             $this->collectionManager,
             $this->nameResolver(),
-            $this->pendingCollections
+            $this->pendingCollections,
+            $this->publicSchemaBuilder,
+            $this->logger
         );
     }
 
@@ -108,15 +122,17 @@ class IndexStructureTest extends TestCase
     {
         $this->scopeResolvesTo(1);
         $desired = [new FieldSpec('sku', 'string', index: true), new FieldSpec('price', 'float', sort: true)];
-        $this->aliasManager->method('generateCollectionName')->willReturn('typesense_catalogsearch_fulltext_1_ts_ab');
+        $this->aliasManager->method('generateCollectionName')->willReturnCallback(
+            static fn (string $alias): string => $alias . '_ts_ab'
+        );
 
         // The collection is built with the computed schema, never the (empty) $fields the caller passes.
         $this->collectionManager = $this->createMock(CollectionManager::class);
-        $captured = null;
-        $this->collectionManager->expects(self::once())
+        $captured = [];
+        $this->collectionManager->expects(self::exactly(2))
             ->method('create')
             ->willReturnCallback(function (string $name, array $fields) use (&$captured): array {
-                $captured = $fields;
+                $captured[$name] = array_map(static fn (FieldSpec $f): string => $f->getName(), $fields);
 
                 return [];
             });
@@ -126,30 +142,105 @@ class IndexStructureTest extends TestCase
         // cleanIndex always passes an empty $fields array — a decoy non-empty one must still be ignored.
         $structure->create(self::INDEXER_ID, [new FieldSpec('decoy', 'string')], $this->dimensions(1));
 
-        self::assertNotNull($captured);
-        self::assertSame(['price', 'sku'], array_map(static fn (FieldSpec $f): string => $f->getName(), $captured));
+        self::assertSame(
+            [
+                'typesense_catalogsearch_fulltext_1_ts_ab' => ['price', 'sku'],
+                'typesense_catalogsearch_fulltext_1_public_ts_ab' => ['name'],
+            ],
+            $captured
+        );
     }
 
-    public function testCreateMakesANewPhysicalCollectionAndRegistersItWithoutReconciling(): void
+    public function testCreateMakesMainAndPublicCollectionsAndRegistersBothWithoutReconciling(): void
     {
         $this->scopeResolvesTo(1);
 
-        $physical = 'typesense_catalogsearch_fulltext_1_1752710400_9f3ac1';
         $this->aliasManager = $this->createMock(AliasManager::class);
-        $this->aliasManager->expects(self::once())
+        $this->aliasManager->expects(self::exactly(2))
             ->method('generateCollectionName')
-            ->with('typesense_catalogsearch_fulltext_1')
-            ->willReturn($physical);
+            ->willReturnMap([
+                ['typesense_catalogsearch_fulltext_1', 'physical_main'],
+                ['typesense_catalogsearch_fulltext_1_public', 'physical_public'],
+            ]);
 
         $this->collectionManager = $this->createMock(CollectionManager::class);
-        $this->collectionManager->expects(self::once())->method('create')->with($physical);
+        $created = [];
+        $this->collectionManager->expects(self::exactly(2))
+            ->method('create')
+            ->willReturnCallback(function (string $name) use (&$created): array {
+                $created[] = $name;
+
+                return [];
+            });
         // Standing up a new collection must NOT go through the reconcile path, which first get()s it.
         $this->collectionManager->expects(self::never())->method('get');
 
         $structure = $this->structure([1 => [new FieldSpec('sku', 'string')]]);
         $structure->create(self::INDEXER_ID, [], $this->dimensions(1));
 
-        self::assertSame($physical, $this->pendingCollections->get('typesense_catalogsearch_fulltext_1'));
+        self::assertSame(['physical_main', 'physical_public'], $created);
+        self::assertSame('physical_main', $this->pendingCollections->get('typesense_catalogsearch_fulltext_1'));
+        self::assertSame(
+            'physical_public',
+            $this->pendingCollections->get('typesense_catalogsearch_fulltext_1_public')
+        );
+    }
+
+    public function testPublicCreateFailureDropsTheMainCollectionAndClearsItsPendingEntry(): void
+    {
+        $this->scopeResolvesTo(1);
+        $this->aliasManager->method('generateCollectionName')->willReturnMap([
+            ['typesense_catalogsearch_fulltext_1', 'physical_main'],
+            ['typesense_catalogsearch_fulltext_1_public', 'physical_public'],
+        ]);
+
+        $this->collectionManager = $this->createMock(CollectionManager::class);
+        $this->collectionManager->method('create')->willReturnCallback(
+            static function (string $name): array {
+                if ($name === 'physical_public') {
+                    throw new TypesenseException('public boom', 500);
+                }
+
+                return [];
+            }
+        );
+        $this->collectionManager->expects(self::once())->method('drop')->with('physical_main');
+
+        try {
+            $this->structure([1 => []])->create(self::INDEXER_ID, [], $this->dimensions(1));
+            self::fail('the public create failure should propagate');
+        } catch (TypesenseException $e) {
+            self::assertSame('public boom', $e->getMessage());
+        }
+
+        self::assertNull($this->pendingCollections->get('typesense_catalogsearch_fulltext_1'));
+        self::assertNull($this->pendingCollections->get('typesense_catalogsearch_fulltext_1_public'));
+    }
+
+    public function testRollbackDropFailureIsLoggedAndTheCreateErrorPropagates(): void
+    {
+        $this->scopeResolvesTo(1);
+        $this->aliasManager->method('generateCollectionName')->willReturnMap([
+            ['typesense_catalogsearch_fulltext_1', 'physical_main'],
+            ['typesense_catalogsearch_fulltext_1_public', 'physical_public'],
+        ]);
+        $this->collectionManager->method('create')->willReturnCallback(
+            static function (string $name): array {
+                if ($name === 'physical_public') {
+                    throw new TypesenseException('public boom', 500);
+                }
+
+                return [];
+            }
+        );
+        $this->collectionManager->method('drop')->willThrowException(new TypesenseException('drop failed', 500));
+        $this->logger = $this->createMock(LoggerInterface::class);
+        $this->logger->expects(self::once())->method('error')->with(self::stringContains('physical_main'));
+
+        $this->expectException(TypesenseException::class);
+        $this->expectExceptionMessage('public boom');
+
+        $this->structure([1 => []])->create(self::INDEXER_ID, [], $this->dimensions(1));
     }
 
     public function testCreateIsPerStoreScope(): void
@@ -164,7 +255,9 @@ class IndexStructureTest extends TestCase
         $this->aliasManager->method('generateCollectionName')
             ->willReturnMap([
                 ['typesense_catalogsearch_fulltext_1', 'physical_1'],
+                ['typesense_catalogsearch_fulltext_1_public', 'physical_1_public'],
                 ['typesense_catalogsearch_fulltext_2', 'physical_2'],
+                ['typesense_catalogsearch_fulltext_2_public', 'physical_2_public'],
             ]);
 
         $structure = $this->structure([
@@ -177,27 +270,51 @@ class IndexStructureTest extends TestCase
 
         self::assertSame('physical_1', $this->pendingCollections->get('typesense_catalogsearch_fulltext_1'));
         self::assertSame('physical_2', $this->pendingCollections->get('typesense_catalogsearch_fulltext_2'));
+        self::assertSame(
+            'physical_2_public',
+            $this->pendingCollections->get('typesense_catalogsearch_fulltext_2_public')
+        );
     }
 
-    public function testDeleteDropsTheCollectionTheAliasTargets(): void
+    public function testDeleteDropsTheMainAndPublicCollectionsAndAliases(): void
     {
         $this->scopeResolvesTo(1);
 
         $this->aliasManager = $this->createMock(AliasManager::class);
-        $this->aliasManager->expects(self::once())
+        $this->aliasManager->expects(self::exactly(2))
             ->method('resolve')
-            ->with('typesense_catalogsearch_fulltext_1')
-            ->willReturn('physical_live');
-        // The alias must be removed too, or it dangles at the dropped collection.
-        $this->aliasManager->expects(self::once())
+            ->willReturnMap([
+                ['typesense_catalogsearch_fulltext_1', 'physical_live'],
+                ['typesense_catalogsearch_fulltext_1_public', 'physical_public_live'],
+            ]);
+        // The aliases must be removed too, or they dangle at the dropped collections.
+        $deletedAliases = [];
+        $this->aliasManager->expects(self::exactly(2))
             ->method('delete')
-            ->with('typesense_catalogsearch_fulltext_1');
+            ->willReturnCallback(function (string $alias) use (&$deletedAliases): array {
+                $deletedAliases[] = $alias;
+
+                return [];
+            });
 
         $this->collectionManager = $this->createMock(CollectionManager::class);
-        $this->collectionManager->expects(self::once())->method('drop')->with('physical_live');
+        $dropped = [];
+        $this->collectionManager->expects(self::exactly(2))
+            ->method('drop')
+            ->willReturnCallback(function (string $name) use (&$dropped): array {
+                $dropped[] = $name;
+
+                return [];
+            });
 
         $structure = $this->structure([1 => []]);
         $structure->delete(self::INDEXER_ID, $this->dimensions(1));
+
+        self::assertSame(['physical_live', 'physical_public_live'], $dropped);
+        self::assertSame(
+            ['typesense_catalogsearch_fulltext_1', 'typesense_catalogsearch_fulltext_1_public'],
+            $deletedAliases
+        );
     }
 
     public function testDeleteToleratesAMissingAliasOnRemoval(): void
@@ -205,7 +322,10 @@ class IndexStructureTest extends TestCase
         $this->scopeResolvesTo(1);
 
         $this->aliasManager = $this->createStub(AliasManager::class);
-        $this->aliasManager->method('resolve')->willReturn('physical_live');
+        $this->aliasManager->method('resolve')->willReturnMap([
+            ['typesense_catalogsearch_fulltext_1', 'physical_live'],
+            ['typesense_catalogsearch_fulltext_1_public', null],
+        ]);
         $this->aliasManager->method('delete')
             ->willThrowException(new TypesenseException('gone', 404));
 
@@ -222,13 +342,16 @@ class IndexStructureTest extends TestCase
         $this->scopeResolvesTo(1);
 
         $this->aliasManager = $this->createMock(AliasManager::class);
-        $this->aliasManager->method('resolve')->willReturn('physical_live');
+        $this->aliasManager->method('resolve')->willReturnMap([
+            ['typesense_catalogsearch_fulltext_1', 'physical_live'],
+            ['typesense_catalogsearch_fulltext_1_public', null],
+        ]);
         // The dangling alias must still be removed once the target is confirmed gone.
         $this->aliasManager->expects(self::once())
             ->method('delete')
             ->with('typesense_catalogsearch_fulltext_1');
 
-        $this->collectionManager = $this->createMock(CollectionManager::class);
+        $this->collectionManager = $this->createStub(CollectionManager::class);
         $this->collectionManager->method('drop')
             ->willThrowException(new TypesenseException('gone', 404));
 
@@ -236,7 +359,7 @@ class IndexStructureTest extends TestCase
         $structure->delete(self::INDEXER_ID, $this->dimensions(1));
     }
 
-    public function testDeleteDropsNothingWhenTheAliasIsUnset(): void
+    public function testDeleteDropsNothingWhenTheAliasesAreUnset(): void
     {
         $this->scopeResolvesTo(1);
 

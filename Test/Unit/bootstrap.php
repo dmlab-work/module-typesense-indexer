@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  *
  * Standalone unit-test bootstrap: loads Magento's Composer autoloader (for the
  * framework classes this module depends on), registers a PSR-4 map for this
@@ -10,6 +11,9 @@
 declare(strict_types=1);
 
 $moduleRoot = dirname(__DIR__, 2);
+
+// Magento's app/bootstrap.php runs everything in UTC.
+date_default_timezone_set('UTC');
 
 $candidates = [
     getenv('MAGENTO_ROOT') ? rtrim((string)getenv('MAGENTO_ROOT'), '/') . '/vendor/autoload.php' : null,
@@ -54,6 +58,11 @@ spl_autoload_register(static function (string $class) use ($psr4): void {
         return;
     }
 });
+
+// Core C3 stand-in when the installed core predates `SynonymSetManager`.
+if (!class_exists(\DmLab\TypesenseCore\Model\Synonym\SynonymSetManager::class)) {
+    require __DIR__ . '/_stubs/SynonymSetManager.php';
+}
 
 // When the module is composer-installed, Magento's autoloader has already run its
 // registration.php; re-requiring it would throw "already defined". Swallow that so the

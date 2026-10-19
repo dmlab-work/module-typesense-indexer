@@ -1,84 +1,57 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
 namespace DmLab\TypesenseIndexer\Test\Unit\Model\Schema\Provider;
 
 use DmLab\TypesenseCore\Model\Collection\FieldSpec;
-use DmLab\TypesenseIndexer\Model\Schema\FieldNameResolver;
 use DmLab\TypesenseIndexer\Model\Schema\Provider\CategoryFieldProvider;
-use Magento\Catalog\Model\ResourceModel\Category\Collection;
-use Magento\Catalog\Model\ResourceModel\Category\CollectionFactory;
 use PHPUnit\Framework\TestCase;
 
 class CategoryFieldProviderTest extends TestCase
 {
     /**
-     * @param int[] $categoryIds
-     * @param null|\Closure(int):void $onSetStoreId records the store the collection was scoped to
+     * @return array<string,FieldSpec>
      */
-    private function provider(array $categoryIds, ?\Closure $onSetStoreId = null): CategoryFieldProvider
+    private function byName(int $storeId = 1): array
     {
-        $collection = $this->createStub(Collection::class);
-        $collection->method('getAllIds')->willReturn($categoryIds);
-        if ($onSetStoreId !== null) {
-            $collection->method('setStoreId')->willReturnCallback($onSetStoreId);
+        $out = [];
+        foreach ((new CategoryFieldProvider())->getFields($storeId) as $spec) {
+            $out[$spec->getName()] = $spec;
         }
 
-        $factory = $this->createStub(CollectionFactory::class);
-        $factory->method('create')->willReturn($collection);
-
-        return new CategoryFieldProvider($factory, new FieldNameResolver());
+        return $out;
     }
 
-    public function testAlwaysProvidesCategoryIdsFacet(): void
+    public function testProvidesCategoryIdsAndASingleRegexPositionField(): void
     {
-        $spec = null;
-        foreach ($this->provider([])->getFields(1) as $field) {
-            if ($field->getName() === 'category_ids') {
-                $spec = $field;
-            }
-        }
+        self::assertSame(['category_ids', 'position_category_.*'], array_keys($this->byName()));
+    }
 
-        self::assertInstanceOf(FieldSpec::class, $spec);
+    public function testCategoryIdsIsAFacetableIdArray(): void
+    {
+        $spec = $this->byName()['category_ids'];
+
         self::assertSame('int64[]', $spec->getType());
         self::assertTrue($spec->getFacet());
+        self::assertTrue($spec->getOptional());
     }
 
-    public function testProvidesPositionFieldPerCategory(): void
+    public function testPositionFieldIsASortableOptionalInt(): void
     {
-        $names = array_map(
-            static fn (FieldSpec $f) => $f->getName(),
-            $this->provider([3, 5])->getFields(1)
-        );
+        $spec = $this->byName()['position_category_.*'];
 
-        self::assertContains('position_category_3', $names);
-        self::assertContains('position_category_5', $names);
+        self::assertSame('int32', $spec->getType());
+        self::assertTrue($spec->getSort());
+        self::assertTrue($spec->getOptional());
+        self::assertNull($spec->getFacet());
     }
 
-    public function testScopesTheCategorySetToTheStore(): void
+    public function testFieldsAreTheSameForEveryStore(): void
     {
-        $seen = null;
-        $this->provider([], static function (int $storeId) use (&$seen): void {
-            $seen = $storeId;
-        })->getFields(4);
-
-        self::assertSame(4, $seen);
-    }
-
-    public function testPositionFieldsAreSortable(): void
-    {
-        $position = null;
-        foreach ($this->provider([7])->getFields(1) as $field) {
-            if ($field->getName() === 'position_category_7') {
-                $position = $field;
-            }
-        }
-
-        self::assertNotNull($position);
-        self::assertTrue($position->getSort());
-        self::assertSame('int32', $position->getType());
+        self::assertEquals($this->byName(1), $this->byName(4));
     }
 }

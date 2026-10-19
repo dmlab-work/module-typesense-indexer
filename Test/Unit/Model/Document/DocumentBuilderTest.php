@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -10,8 +11,26 @@ use DmLab\TypesenseCore\Model\Collection\FieldSpec;
 use DmLab\TypesenseIndexer\Model\Document\CompositeDocumentDataProvider;
 use DmLab\TypesenseIndexer\Model\Document\DocumentBuilder;
 use DmLab\TypesenseIndexer\Model\Document\DocumentDataProviderInterface;
+use DmLab\TypesenseIndexer\Model\Document\Provider\ChildAttributeDataProvider;
+use DmLab\TypesenseIndexer\Model\Document\Provider\StockDataProvider;
+use DmLab\TypesenseIndexer\Model\Schema\AttributeFieldPolicy;
+use DmLab\TypesenseIndexer\Model\Schema\AttributeTypeMap;
 use DmLab\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
+use DmLab\TypesenseIndexer\Model\Schema\FieldNameResolver;
 use DmLab\TypesenseIndexer\Model\Schema\FieldProviderInterface;
+use DmLab\TypesenseIndexer\Model\Schema\OptionAttributeList;
+use Magento\Catalog\Model\Product;
+use Magento\Catalog\Model\ResourceModel\Eav\Attribute;
+use Magento\Catalog\Model\ResourceModel\Product\Attribute\Collection as AttributeCollection;
+use Magento\Catalog\Model\ResourceModel\Product\Attribute\CollectionFactory as AttributeCollectionFactory;
+use Magento\Catalog\Model\ResourceModel\Product\Collection as ProductCollection;
+use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory as ProductCollectionFactory;
+use Magento\CatalogInventory\Api\StockConfigurationInterface;
+use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\DB\Adapter\AdapterInterface;
+use Magento\Framework\DB\Select;
+use Magento\Store\Api\Data\StoreInterface;
+use Magento\Store\Model\StoreManagerInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -20,8 +39,9 @@ class DocumentBuilderTest extends TestCase
     /**
      * @param FieldSpec[] $schema fields the schema policy declares for the store
      * @param DocumentDataProviderInterface[] $dataProviders the enrichment chain
+     * @param array<string,array{0:string,1:string}> $attributes code ⇒ [backend_type, frontend_input]
      */
-    private function builder(array $schema, array $dataProviders): DocumentBuilder
+    private function builder(array $schema, array $dataProviders, array $attributes = []): DocumentBuilder
     {
         $fieldProvider = new class ($schema) implements FieldProviderInterface {
             /** @param FieldSpec[] $schema */
@@ -35,9 +55,26 @@ class DocumentBuilderTest extends TestCase
             }
         };
 
+        $items = [];
+        foreach ($attributes as $code => [$backend, $input]) {
+            $attribute = $this->createStub(Attribute::class);
+            $attribute->method('getAttributeCode')->willReturn($code);
+            $attribute->method('getBackendType')->willReturn($backend);
+            $attribute->method('getFrontendInput')->willReturn($input);
+            $items[] = $attribute;
+        }
+        $collection = $this->createStub(AttributeCollection::class);
+        $collection->method('getItems')->willReturn($items);
+        $factory = $this->createStub(AttributeCollectionFactory::class);
+        $factory->method('create')->willReturn($collection);
+
         return new DocumentBuilder(
             new CompositeDocumentDataProvider($dataProviders),
-            new DesiredSchemaBuilder($fieldProvider)
+            new AttributeTypeMap(
+                $factory,
+                new AttributeFieldPolicy(new FieldNameResolver()),
+                new DesiredSchemaBuilder($fieldProvider)
+            )
         );
     }
 
@@ -287,5 +324,216 @@ class DocumentBuilderTest extends TestCase
 
         self::assertSame('ab', $documents['42']['seq']);
         self::assertSame('42', $documents['42']['id'], 'the builder re-stamps the id after providers run');
+    }
+
+    public function testCastsUndeclaredAttributeValuesToTheirPolicyType(): void
+    {
+        $builder = $this->builder(
+            [],
+            [
+                $this->dataProvider(static function (array $docs): array {
+                    $docs['42']['price'] = '52.000000';
+                    $docs['42']['eco_collection'] = '1';
+                    $docs['42']['manufacturer'] = '12';
+                    $docs['42']['material'] = '12,15';
+                    $docs['42']['type_id'] = 'simple';
+
+                    return $docs;
+                }),
+            ],
+            [
+                'price' => ['decimal', 'price'],
+                'eco_collection' => ['int', 'boolean'],
+                'manufacturer' => ['int', 'select'],
+                'material' => ['varchar', 'multiselect'],
+            ]
+        );
+
+        $document = $builder->build(new \ArrayIterator([42 => []]), 1)['42'];
+
+        self::assertSame(52.0, $document['price']);
+        self::assertSame(1, $document['eco_collection']);
+        self::assertSame([12], $document['manufacturer']);
+        self::assertSame([12, 15], $document['material']);
+        self::assertSame('simple', $document['type_id']);
+    }
+
+    public function testDeclaredTypeWinsOverPolicyTypeAndCollapsesAnOptionList(): void
+    {
+        // `visibility` is an int select (policy `int32[]`) but StaticFieldProvider declares it `int32`.
+        $builder = $this->builder(
+            [new FieldSpec('visibility', 'int32', facet: true)],
+            [
+                $this->dataProvider(static function (array $docs): array {
+                    $docs['42']['visibility'] = ['4'];
+                    $docs['43']['visibility'] = [];
+
+                    return $docs;
+                }),
+            ],
+            ['visibility' => ['int', 'select']]
+        );
+
+        $documents = $builder->build(new \ArrayIterator([42 => [], 43 => []]), 1);
+
+        self::assertSame(4, $documents['42']['visibility']);
+        self::assertArrayNotHasKey('visibility', $documents['43']);
+    }
+
+    public function testStructuredFieldTypesKeepTheirArrayValues(): void
+    {
+        $builder = $this->builder(
+            [
+                new FieldSpec('location', 'geopoint', optional: true),
+                new FieldSpec('meta', 'object', optional: true),
+                new FieldSpec('extra', 'auto', optional: true),
+            ],
+            [
+                $this->dataProvider(static function (array $docs): array {
+                    $docs['42']['location'] = [50.45, 30.52];
+                    $docs['42']['meta'] = ['brand' => 'X'];
+                    $docs['42']['extra'] = ['a', 'b'];
+
+                    return $docs;
+                }),
+            ]
+        );
+
+        $documents = $builder->build(new \ArrayIterator([42 => []]), 1);
+
+        self::assertSame([50.45, 30.52], $documents['42']['location']);
+        self::assertSame(['brand' => 'X'], $documents['42']['meta']);
+        self::assertSame(['a', 'b'], $documents['42']['extra']);
+    }
+
+    public function testDropsEmptyEntriesFromIntLists(): void
+    {
+        $builder = $this->builder(
+            [],
+            [
+                $this->dataProvider(static function (array $docs): array {
+                    $docs['42']['material'] = ['12', '', null, '15'];
+                    $docs['43']['material'] = '';
+
+                    return $docs;
+                }),
+            ],
+            ['material' => ['varchar', 'multiselect']]
+        );
+
+        $documents = $builder->build(new \ArrayIterator([42 => [], 43 => []]), 1);
+
+        self::assertSame([12, 15], $documents['42']['material']);
+        self::assertSame([], $documents['43']['material']);
+    }
+
+    public function testUndeclaredScopedKeysTakeTheTypeOfTheMatchingRegexField(): void
+    {
+        $builder = $this->builder(
+            [
+                new FieldSpec('price_[0-9]+_.*', 'float', facet: true, sort: true, optional: true),
+                new FieldSpec('position_category_.*', 'int32', sort: true, optional: true),
+            ],
+            [
+                $this->dataProvider(static function (array $docs): array {
+                    $docs['42']['price_7_3'] = '19.990000';
+                    $docs['42']['position_category_999'] = '5';
+                    $docs['42']['pricey'] = '1';
+
+                    return $docs;
+                }),
+            ]
+        );
+
+        $document = $builder->build(new \ArrayIterator([42 => []]), 1)['42'];
+
+        self::assertSame(19.99, $document['price_7_3']);
+        self::assertSame(5, $document['position_category_999']);
+        self::assertSame('1', $document['pricey'], 'a key matching no regex stays untouched');
+    }
+
+    public function testExactTypeWinsOverAMatchingRegexField(): void
+    {
+        $builder = $this->builder(
+            [new FieldSpec('price_[0-9]+_.*', 'float', optional: true)],
+            [
+                $this->dataProvider(static function (array $docs): array {
+                    $docs['42']['price_view'] = '3';
+
+                    return $docs;
+                }),
+            ],
+            ['price_view' => ['varchar', 'text']]
+        );
+
+        self::assertSame('3', $builder->build(new \ArrayIterator([42 => []]), 1)['42']['price_view']);
+    }
+
+    public function testCompositeParentCarriesItsChildrenOptionIdsAsAnIntList(): void
+    {
+        $select = $this->createStub(Select::class);
+        $select->method('from')->willReturnSelf();
+        $select->method('where')->willReturnSelf();
+        $connection = $this->createStub(AdapterInterface::class);
+        $connection->method('select')->willReturn($select);
+        $connection->method('fetchAll')->willReturn([
+            ['parent_id' => 62, 'child_id' => 63],
+            ['parent_id' => 62, 'child_id' => 64],
+        ]);
+        $resource = $this->createStub(ResourceConnection::class);
+        $resource->method('getConnection')->willReturn($connection);
+        $resource->method('getTableName')->willReturnArgument(0);
+
+        $children = [];
+        foreach ([63 => '49', 64 => '50'] as $id => $color) {
+            $child = $this->createStub(Product::class);
+            $child->method('getId')->willReturn($id);
+            $child->method('getData')->willReturnCallback(static fn ($key = '') => $key === 'color' ? $color : null);
+            $children[] = $child;
+        }
+        $childCollection = $this->createStub(ProductCollection::class);
+        $childCollection->method('getItems')->willReturn($children);
+        $productFactory = $this->createStub(ProductCollectionFactory::class);
+        $productFactory->method('create')->willReturn($childCollection);
+
+        $color = $this->createStub(Attribute::class);
+        $color->method('getAttributeCode')->willReturn('color');
+        $color->method('getFrontendInput')->willReturn('select');
+        $color->method('getBackendType')->willReturn('int');
+        $attributes = $this->createStub(AttributeCollection::class);
+        $attributes->method('getItems')->willReturn([$color]);
+        $attributeFactory = $this->createStub(AttributeCollectionFactory::class);
+        $attributeFactory->method('create')->willReturn($attributes);
+
+        $store = $this->createStub(StoreInterface::class);
+        $store->method('getWebsiteId')->willReturn(1);
+        $storeManager = $this->createStub(StoreManagerInterface::class);
+        $storeManager->method('getStore')->willReturn($store);
+
+        $stockConfiguration = $this->createStub(StockConfigurationInterface::class);
+        $stockConfiguration->method('isShowOutOfStock')->willReturn(true);
+
+        $builder = $this->builder(
+            [],
+            [
+                // The parent's own EAV value, as AttributeDataProvider writes it.
+                $this->dataProvider(static function (array $docs): array {
+                    $docs['62']['color'] = ['49'];
+
+                    return $docs;
+                }),
+                new ChildAttributeDataProvider(
+                    $resource,
+                    $productFactory,
+                    new OptionAttributeList($attributeFactory, new AttributeFieldPolicy(new FieldNameResolver())),
+                    $storeManager,
+                    $stockConfiguration,
+                    $this->createStub(StockDataProvider::class)
+                ),
+            ],
+            ['color' => ['int', 'select']]
+        );
+
+        self::assertSame([49, 50], $builder->build(new \ArrayIterator([62 => []]), 1)['62']['color']);
     }
 }

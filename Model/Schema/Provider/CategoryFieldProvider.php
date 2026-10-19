@@ -1,56 +1,34 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
 namespace DmLab\TypesenseIndexer\Model\Schema\Provider;
 
 use DmLab\TypesenseCore\Model\Collection\FieldSpec;
-use DmLab\TypesenseIndexer\Model\Schema\FieldNameResolver;
 use DmLab\TypesenseIndexer\Model\Schema\FieldProviderInterface;
-use Magento\Catalog\Model\ResourceModel\Category\CollectionFactory;
 
 /**
- * Category membership and per-category sort position, scoped to the store view.
+ * Category membership and per-category sort position.
  *
- * `category_ids` is a facetable id array (layered navigation by category). Each category
- * a product can live in also gets its own `position_category_<id>` sort field, mirroring
- * Magento's Elasticsearch naming so `typesense-search` addresses them identically. The
- * category set is store-scoped, so different store views yield different position fields.
+ * `category_ids` is a facetable id array (layered navigation by category). Positions use one
+ * regex field covering every `position_category_<id>` key (Magento's Elasticsearch naming), so a
+ * new category is sortable without a schema change.
  */
 class CategoryFieldProvider implements FieldProviderInterface
 {
-    /**
-     * @param CollectionFactory $categoryCollectionFactory
-     * @param FieldNameResolver $fieldNameResolver
-     */
-    public function __construct(
-        private readonly CollectionFactory $categoryCollectionFactory,
-        private readonly FieldNameResolver $fieldNameResolver
-    ) {
-    }
+    public const POSITION_FIELD = 'position_category_.*';
 
     /**
      * @inheritDoc
      */
     public function getFields(int $storeId): array
     {
-        $fields = [
+        return [
             new FieldSpec(name: 'category_ids', type: 'int64[]', facet: true, optional: true),
+            new FieldSpec(name: self::POSITION_FIELD, type: 'int32', sort: true, optional: true),
         ];
-
-        $collection = $this->categoryCollectionFactory->create();
-        $collection->setStoreId($storeId);
-        foreach ($collection->getAllIds() as $categoryId) {
-            $fields[] = new FieldSpec(
-                name: $this->fieldNameResolver->resolve('position', ['categoryId' => (int)$categoryId]),
-                type: 'int32',
-                sort: true,
-                optional: true
-            );
-        }
-
-        return $fields;
     }
 }

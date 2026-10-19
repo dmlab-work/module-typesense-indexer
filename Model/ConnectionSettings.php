@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -27,6 +28,8 @@ use Magento\Framework\Encryption\EncryptorInterface;
  *
  * The path constants are public so `typesense-search`'s `Setup\InstallConfig` can write the
  * connection at `setup:install --search-engine=typesense` against the same literal paths.
+ *
+ * @api
  */
 class ConnectionSettings implements ConnectionSettingsInterface
 {

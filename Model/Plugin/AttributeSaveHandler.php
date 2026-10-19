@@ -1,17 +1,18 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
 namespace DmLab\TypesenseIndexer\Model\Plugin;
 
 use DmLab\TypesenseCore\Model\Collection\AliasManager;
-use DmLab\TypesenseCore\Model\Schema\Reconciler;
 use DmLab\TypesenseIndexer\Model\Config;
 use DmLab\TypesenseIndexer\Api\EngineCode;
 use DmLab\TypesenseIndexer\Model\Indexer\IndexNameResolver;
-use DmLab\TypesenseIndexer\Model\Schema\DesiredSchemaBuilder;
+use DmLab\TypesenseIndexer\Model\Indexer\ReindexInvalidationMarker;
+use DmLab\TypesenseIndexer\Model\Schema\CollectionSchemaSync;
 use Magento\Catalog\Model\Product;
 use Magento\CatalogSearch\Model\Indexer\Fulltext;
 use Magento\Eav\Model\Config as EavConfig;
@@ -23,17 +24,15 @@ use Psr\Log\LoggerInterface;
 
 /**
  * The logic behind the attribute-save plugin: is the Typesense flow active, and what does an
- * attribute save do to the schema.
+ * attribute save or delete do to the schema.
  *
- * A flag change on an existing attribute is a **schema-only** event — its value is already in the
- * FAT documents — so it is reconciled in place (a PATCH that rebuilds the in-memory index from the
- * stored documents, no reimport). Only when core answers `needs-rebuild` (past the size threshold,
- * an uncoercible type change, or a transport failure) do we fall back to a native invalidation.
+ * Flag changes, new attributes and deletions are **schema-only** events — values are already in the
+ * FAT documents (a new attribute has none yet) — so each store's main and public collections are
+ * reconciled in place (a PATCH that rebuilds the in-memory index from the stored documents, no
+ * reimport). Only when core answers `needs-rebuild` (past the size threshold, an uncoercible type
+ * change, or a transport failure) do we fall back to a native invalidation.
  *
- * A **new** attribute is different: its values are in no document yet, so its column has to be
- * written before it can be indexed. There we invalidate unconditionally — deliberately more
- * expensive than ES's in-place mapping add, and correct for a FAT store.
- *
+ * @api
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  */
 class AttributeSaveHandler
@@ -41,28 +40,28 @@ class AttributeSaveHandler
     /**
      * @param EngineResolverInterface $engineResolver the currently configured search engine
      * @param Config $config the escape-hatch toggle
-     * @param Reconciler $reconciler core's in-place-or-rebuild schema decision
      * @param AliasManager $aliasManager resolves an alias to its live physical collection
-     * @param DesiredSchemaBuilder $schemaBuilder the per-store desired `FieldSpec[]`
+     * @param CollectionSchemaSync $schemaSync reconciles a collection toward the store's desired schema
      * @param IndexNameResolver $nameResolver alias name for a scope
      * @param StoreManagerInterface $storeManager the store views whose collections to reconcile
      * @param IndexerRegistry $indexerRegistry the fulltext indexer, for the invalidation fallback
      * @param SearchRequestConfig $searchRequestConfig cached search-request config to reset
      * @param EavConfig $eavConfig product entity type, to flag the searchable list stale
      * @param LoggerInterface $logger surfaces rebuild fallbacks and per-store failures
+     * @param ReindexInvalidationMarker $invalidationMarker keeps the invalidation past a running full reindex
      */
     public function __construct(
         private readonly EngineResolverInterface $engineResolver,
         private readonly Config $config,
-        private readonly Reconciler $reconciler,
         private readonly AliasManager $aliasManager,
-        private readonly DesiredSchemaBuilder $schemaBuilder,
+        private readonly CollectionSchemaSync $schemaSync,
         private readonly IndexNameResolver $nameResolver,
         private readonly StoreManagerInterface $storeManager,
         private readonly IndexerRegistry $indexerRegistry,
         private readonly SearchRequestConfig $searchRequestConfig,
         private readonly EavConfig $eavConfig,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly ReindexInvalidationMarker $invalidationMarker
     ) {
     }
 
@@ -91,12 +90,12 @@ class AttributeSaveHandler
     }
 
     /**
-     * Handle a save of an existing attribute.
+     * Handle an attribute save that touches the schema (a new flagged attribute or a flag change).
      *
-     * Refresh the request config, then reconcile every store's collection in place, falling back to
+     * Refresh the request config, then reconcile every store's collections in place, falling back to
      * a full invalidation if any store needs a rebuild.
      */
-    public function handleExistingAttributeSave(): void
+    public function handleAttributeSave(): void
     {
         $this->refreshSearchConfig();
 
@@ -106,63 +105,51 @@ class AttributeSaveHandler
     }
 
     /**
-     * Handle a save of a new attribute.
-     *
-     * Its column is in no document, so refresh the config and invalidate: a reindex writes the
-     * column and keeps later flag toggles a cheap PATCH.
+     * Handle an attribute delete: the PATCH drops its fields; invalidate only if a store needs a rebuild.
      */
-    public function handleNewAttributeSave(): void
+    public function handleAttributeDelete(): void
     {
-        $this->refreshSearchConfig();
+        $this->handleAttributeSave();
+    }
+
+    /**
+     * Handle an option attribute that just became storefront-exposed: the public documents lack its labels.
+     *
+     * Only a reindex adds them, so the fulltext index is marked invalid (no inline reindex) when Typesense
+     * is the engine. Toggling between exposed states needs nothing beyond the usual schema PATCH.
+     */
+    public function handleLabelsExposed(): void
+    {
+        if ($this->engineResolver->getCurrentSearchEngine() !== EngineCode::ENGINE) {
+            return;
+        }
+
+        $this->logger->info('Typesense indexer: option attribute became storefront-exposed; reindex for its labels.');
         $this->invalidate();
     }
 
     /**
-     * Reconcile each store view's live collection toward its desired schema.
-     *
-     * A store with no live collection yet (never reindexed) is skipped — there is nothing to PATCH.
-     * A `needs-rebuild` decision, or a failure that leaves the in-place outcome unknown, is reported
-     * so the caller can invalidate rather than silently leave the schema stale.
+     * Reconcile each store view's live main and public collections toward their desired schemas.
      *
      * @return bool whether any store needs a full rebuild
      */
     private function reconcileNeedsRebuild(): bool
     {
         $needsRebuild = false;
+        $policy = $this->config->getReconcilePolicy();
 
         foreach ($this->storeManager->getStores() as $store) {
             $storeId = (int)$store->getId();
-            $alias = $this->nameResolver->getAliasName(Fulltext::INDEXER_ID, $storeId);
+            $mainAlias = $this->nameResolver->getAliasName(Fulltext::INDEXER_ID, $storeId);
+            $publicAlias = $this->nameResolver->getPublicAliasName(Fulltext::INDEXER_ID, $storeId);
 
-            try {
-                $collection = $this->aliasManager->resolve($alias);
-                if ($collection === null) {
-                    continue;
-                }
-
-                $decision = $this->reconciler->reconcile(
-                    $collection,
-                    $this->schemaBuilder->build($storeId),
-                    $this->config->getReconcilePolicy()
-                );
-                if ($decision->needsRebuild()) {
-                    $needsRebuild = true;
-                    $this->logger->info(
-                        sprintf(
-                            'Typesense indexer: schema change on "%s" needs a rebuild — %s',
-                            $alias,
-                            (string)$decision->getReason()
-                        )
-                    );
-                }
-            } catch (\Exception $e) {
-                // Could not apply in place (transport failure, bad decision config, …); fall back to a
-                // rebuild rather than leave the schema stale or fatal the admin save.
+            $main = fn (string $collection) => $this->schemaSync->reconcileMain($collection, $storeId, $policy);
+            if ($this->aliasNeedsRebuild($mainAlias, $main)) {
                 $needsRebuild = true;
-                $this->logger->error(
-                    sprintf('Typesense indexer: could not reconcile schema for "%s": %s', $alias, $e->getMessage()),
-                    ['exception' => $e]
-                );
+            }
+            $public = fn (string $collection) => $this->schemaSync->reconcilePublic($collection, $storeId, $policy);
+            if ($this->aliasNeedsRebuild($publicAlias, $public)) {
+                $needsRebuild = true;
             }
         }
 
@@ -170,10 +157,56 @@ class AttributeSaveHandler
     }
 
     /**
+     * Reconcile one alias's live collection toward its desired schema.
+     *
+     * An alias with no live collection yet (never reindexed) is skipped — there is nothing to PATCH.
+     * A `needs-rebuild` decision, or a failure that leaves the in-place outcome unknown, is reported
+     * so the caller can invalidate rather than silently leave the schema stale.
+     *
+     * @param string $alias
+     * @param callable $reconcile live collection name ⇒ core `Decision`
+     * @return bool whether the alias needs a full rebuild
+     */
+    private function aliasNeedsRebuild(string $alias, callable $reconcile): bool
+    {
+        try {
+            $collection = $this->aliasManager->resolve($alias);
+            if ($collection === null) {
+                return false;
+            }
+
+            $decision = $reconcile($collection);
+            if ($decision->needsRebuild()) {
+                $this->logger->info(
+                    sprintf(
+                        'Typesense indexer: schema change on "%s" needs a rebuild — %s',
+                        $alias,
+                        (string)$decision->getReason()
+                    )
+                );
+
+                return true;
+            }
+        } catch (\Exception $e) {
+            // Could not apply in place (transport failure, bad decision config, …); fall back to a
+            // rebuild rather than leave the schema stale or fatal the admin save.
+            $this->logger->error(
+                sprintf('Typesense indexer: could not reconcile schema for "%s": %s', $alias, $e->getMessage()),
+                ['exception' => $e]
+            );
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Fall back to Magento's native invalidation of the fulltext index.
      */
     private function invalidate(): void
     {
+        $this->invalidationMarker->mark();
         $this->indexerRegistry->get(Fulltext::INDEXER_ID)->invalidate();
     }
 }

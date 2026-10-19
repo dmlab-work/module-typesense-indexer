@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -42,5 +43,13 @@ class IndexNameResolver implements IndexNameResolverInterface
     public function getAliasName(string $indexerId, int $storeId): string
     {
         return $this->connectionSettings->getIndexPrefix() . '_' . $indexerId . '_' . $storeId;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getPublicAliasName(string $indexerId, int $storeId): string
+    {
+        return $this->getAliasName($indexerId, $storeId) . '_public';
     }
 }

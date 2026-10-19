@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -131,5 +132,23 @@ class DesiredSchemaBuilderTest extends TestCase
         self::assertSame('float[]', $embedding->getType());
         self::assertSame(384, $embedding->getExtra()['num_dim']);
         self::assertSame('ts/e5', $embedding->toArray()['embed']['model_config']['model_name']);
+    }
+
+    public function testRegexFieldsSurviveDedupAndOrdering(): void
+    {
+        $builder = $this->builder(
+            $this->fixed([new FieldSpec('sku', 'string'), new FieldSpec('price_[0-9]+_.*', 'float', facet: true)]),
+            $this->fixed([
+                new FieldSpec('position_category_.*', 'int32', sort: true),
+                new FieldSpec('price_[0-9]+_.*', 'float', sort: true),
+                new FieldSpec('category_ids', 'int64[]', facet: true),
+            ]),
+        );
+
+        $specs = $this->byName($builder);
+
+        self::assertSame(['category_ids', 'position_category_.*', 'price_[0-9]+_.*', 'sku'], array_keys($specs));
+        self::assertTrue($specs['price_[0-9]+_.*']->getFacet());
+        self::assertTrue($specs['price_[0-9]+_.*']->getSort());
     }
 }

@@ -1,6 +1,7 @@
 <?php
 /**
  * Copyright © DMLab. All rights reserved.
+ * Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.
  */
 declare(strict_types=1);
 
@@ -15,9 +16,9 @@ use Magento\Store\Model\Indexer\WebsiteDimensionProvider;
 use Magento\Store\Model\StoreManagerInterface;
 
 /**
- * Final price per customer group for the store view's website (`price_<group>_<website>`),
- * read from the price index — the same field names the
- * {@see \DmLab\TypesenseIndexer\Model\Schema\Provider\PriceFieldProvider} declares.
+ * Minimal price per customer group for the store view's website (`price_<group>_<website>`),
+ * read from the price index `min_price` (as OpenSearch does; bundle/grouped get a real price) — the same
+ * field names the {@see \DmLab\TypesenseIndexer\Model\Schema\Provider\PriceFieldProvider} declares.
  *
  * The base `catalog_product_index_price` table is only maintained when the price indexer runs in the
  * default (`none`) dimensions mode; under a `website` / `customer_group` mode Magento keeps the data
@@ -72,7 +73,7 @@ class PriceDataProvider implements DocumentDataProviderInterface
             $selects[] = $connection->select()
                 ->from(
                     $this->tableResolver->resolve(self::PRICE_INDEX_TABLE, $dimensions),
-                    ['entity_id', 'customer_group_id', 'final_price']
+                    ['entity_id', 'customer_group_id', 'min_price']
                 )
                 ->where('entity_id IN (?)', $ids)
                 ->where('website_id = ?', $websiteId);
@@ -84,14 +85,14 @@ class PriceDataProvider implements DocumentDataProviderInterface
 
         foreach ($connection->fetchAll($connection->select()->union($selects)) as $row) {
             $productId = (string)$row['entity_id'];
-            if (!isset($documents[$productId])) {
+            if (!isset($documents[$productId]) || $row['min_price'] === null) {
                 continue;
             }
             $name = $this->fieldNameResolver->resolve(
                 'price',
                 ['customerGroupId' => (int)$row['customer_group_id'], 'websiteId' => $websiteId]
             );
-            $documents[$productId][$name] = (float)$row['final_price'];
+            $documents[$productId][$name] = round((float)$row['min_price'], 2);
         }
 
         return $documents;
