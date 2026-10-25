@@ -3,7 +3,7 @@
     "description": "Turns the Magento catalog into Typesense documents and owns the attribute→schema policy. Implements Magento's indexer contracts so catalogsearch_fulltext writes to Typesense: FAT documents, THIN schema, in-place flag PATCH instead of full reindex.",
     "type": "magento2-module",
     "license": "OSL-3.0",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "require": {
         "php": "~8.3.0||~8.4.0||~8.5.0",
         "magento/framework": "^103.0.9",

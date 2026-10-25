@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Fixed: saving or deleting a search synonym no longer invalidates `catalogsearch_fulltext` on Typesense (synonyms sync in place).
+- Fixed: attribute saves via repository/API no longer always invalidate `catalogsearch_fulltext` as newly storefront-exposed.
+- Tested on Magento 2.4.9 and PHP 8.5.
+
 ## 0.2.0
 
 - Composite products carry their in-stock children's option values.
