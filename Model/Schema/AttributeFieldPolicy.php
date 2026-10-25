@@ -70,6 +70,20 @@ class AttributeFieldPolicy
     ];
 
     /**
+     * Every flag the save-time checks compare: the union of {@see SCHEMA_FLAGS}, {@see SEARCH_CONFIG_FLAGS}
+     * and {@see STOREFRONT_FLAGS}.
+     */
+    public const TRACKED_FLAGS = [
+        'is_searchable',
+        'is_filterable',
+        'is_filterable_in_search',
+        'used_for_sort_by',
+        'is_visible_in_advanced_search',
+        'is_visible_on_front',
+        'used_in_product_listing',
+    ];
+
+    /**
      * @param FieldNameResolver $fieldNameResolver
      */
     public function __construct(
@@ -83,17 +97,12 @@ class AttributeFieldPolicy
      * Lets the attribute-save plugin skip the per-store reconcile round-trips for a save that
      * touched no schema-relevant flag — the native plugin gates its invalidation the same way.
      *
-     * @param AbstractModel $attribute the attribute being saved (carries its dirty-field state)
+     * @param AbstractModel $attribute the attribute being saved
+     * @param array<string,mixed> $before its persisted flags (see {@see TRACKED_FLAGS})
      */
-    public function schemaFlagsChanged(AbstractModel $attribute): bool
+    public function schemaFlagsChanged(AbstractModel $attribute, array $before): bool
     {
-        foreach (self::SCHEMA_FLAGS as $flag) {
-            if ($attribute->dataHasChangedFor($flag)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->flagsChanged($attribute, $before, self::SCHEMA_FLAGS);
     }
 
     /**
@@ -118,17 +127,12 @@ class AttributeFieldPolicy
      * Mirrors native's reset gate so `is_visible_in_advanced_search` — which has no schema effect and so
      * is absent from {@see SCHEMA_FLAGS} — still triggers a config refresh under the Typesense flow.
      *
-     * @param AbstractModel $attribute the attribute being saved (carries its dirty-field state)
+     * @param AbstractModel $attribute the attribute being saved
+     * @param array<string,mixed> $before its persisted flags (see {@see TRACKED_FLAGS})
      */
-    public function searchConfigChanged(AbstractModel $attribute): bool
+    public function searchConfigChanged(AbstractModel $attribute, array $before): bool
     {
-        foreach (self::SEARCH_CONFIG_FLAGS as $flag) {
-            if ($attribute->dataHasChangedFor($flag)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->flagsChanged($attribute, $before, self::SEARCH_CONFIG_FLAGS);
     }
 
     /**
@@ -151,9 +155,10 @@ class AttributeFieldPolicy
      *
      * Its labels are then missing from the public documents, which only a reindex adds.
      *
-     * @param AbstractModel $attribute the attribute being saved (carries its original data)
+     * @param AbstractModel $attribute the attribute being saved
+     * @param array<string,mixed> $before its persisted flags (see {@see TRACKED_FLAGS})
      */
-    public function optionLabelsBecameExposed(AbstractModel $attribute): bool
+    public function optionLabelsBecameExposed(AbstractModel $attribute, array $before): bool
     {
         if (!$attribute instanceof Attribute || !$this->isOptionAttribute($attribute)) {
             return false;
@@ -162,11 +167,43 @@ class AttributeFieldPolicy
         $was = false;
         $is = false;
         foreach (self::STOREFRONT_FLAGS as $flag) {
-            $was = $was || (bool)$attribute->getOrigData($flag);
-            $is = $is || (bool)$attribute->getData($flag);
+            $was = $was || (bool)($before[$flag] ?? null);
+            $is = $is || (bool)$this->flagAfterSave($attribute, $before, $flag);
         }
 
         return !$was && $is;
+    }
+
+    /**
+     * Whether any of `$flags` differs between the persisted state and what this save writes.
+     *
+     * @param AbstractModel $attribute
+     * @param array<string,mixed> $before
+     * @param string[] $flags
+     */
+    private function flagsChanged(AbstractModel $attribute, array $before, array $flags): bool
+    {
+        foreach ($flags as $flag) {
+            if ((int)$this->flagAfterSave($attribute, $before, $flag) !== (int)($before[$flag] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The flag value persisted by this save.
+     *
+     * A null flag is not written to `catalog_eav_attribute`, so it keeps its stored value.
+     *
+     * @param AbstractModel $attribute
+     * @param array<string,mixed> $before
+     * @param string $flag
+     */
+    private function flagAfterSave(AbstractModel $attribute, array $before, string $flag): mixed
+    {
+        return $attribute->getData($flag) ?? $before[$flag] ?? null;
     }
 
     /**

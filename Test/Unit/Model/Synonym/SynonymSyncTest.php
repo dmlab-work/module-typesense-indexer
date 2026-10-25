@@ -109,7 +109,7 @@ class SynonymSyncTest extends TestCase
                 $names[] = $name;
             });
 
-        $this->sync()->syncAllStores();
+        self::assertTrue($this->sync()->syncAllStores());
 
         self::assertSame(
             ['typesense_catalogsearch_fulltext_1_synonyms', 'typesense_catalogsearch_fulltext_2_synonyms'],
@@ -136,7 +136,7 @@ class SynonymSyncTest extends TestCase
             ->method('error')
             ->with(self::logicalAnd(self::stringContains('store 2'), self::stringContains('down')));
 
-        $this->sync()->syncAllStores();
+        self::assertFalse($this->sync()->syncAllStores());
 
         self::assertSame(
             [

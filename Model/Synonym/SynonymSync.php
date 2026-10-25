@@ -63,9 +63,12 @@ class SynonymSync
      * Resync every store view (a group save may merge or delete other groups).
      *
      * Each store is synced independently: a failure is logged and the remaining stores still sync.
+     *
+     * @return bool whether every store synced
      */
-    public function syncAllStores(): void
+    public function syncAllStores(): bool
     {
+        $synced = true;
         foreach ($this->storeManager->getStores() as $store) {
             $storeId = (int)$store->getId();
             try {
@@ -75,8 +78,11 @@ class SynonymSync
                     sprintf('Typesense indexer: synonym sync failed for store %d — %s', $storeId, $e->getMessage()),
                     ['exception' => $e]
                 );
+                $synced = false;
             }
         }
+
+        return $synced;
     }
 
     /**

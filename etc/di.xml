@@ -156,9 +156,12 @@
     <type name="Magento\Framework\Indexer\IndexerInterface">
         <plugin name="dmlab_typesense_indexer_reindex_all_invalidation"
                 type="DmLab\TypesenseIndexer\Model\Plugin\Indexer\ReindexAllInvalidationPlugin"/>
+        <plugin name="dmlab_typesense_indexer_suppressed_invalidation"
+                type="DmLab\TypesenseIndexer\Model\Plugin\Indexer\SuppressedInvalidationPlugin"/>
     </type>
 
-    <!-- Native synonym group save/delete → resync every store's Typesense synonym set. -->
+    <!-- Synonym save/delete → resync Typesense synonym sets in place; the native fulltext invalidation is
+         suppressed for the call on Typesense only, so ES/OpenSearch keep it. -->
     <type name="Magento\Search\Model\SynonymGroupRepository">
         <plugin name="dmlab_typesense_indexer_synonym_sync"
                 type="DmLab\TypesenseIndexer\Model\Plugin\Search\SynonymGroupRepositoryPlugin"/>

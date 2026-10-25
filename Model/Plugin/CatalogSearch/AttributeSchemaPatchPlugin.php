@@ -9,6 +9,7 @@ namespace DmLab\TypesenseIndexer\Model\Plugin\CatalogSearch;
 
 use DmLab\TypesenseIndexer\Model\Plugin\AttributeSaveContext;
 use DmLab\TypesenseIndexer\Model\Plugin\AttributeSaveHandler;
+use DmLab\TypesenseIndexer\Model\Plugin\PersistedAttributeFlags;
 use DmLab\TypesenseIndexer\Model\Schema\AttributeFieldPolicy;
 use Magento\Catalog\Model\ResourceModel\Attribute as AttributeResourceModel;
 use Magento\CatalogSearch\Model\Indexer\Fulltext\Plugin\Attribute as NativeAttributePlugin;
@@ -37,19 +38,21 @@ class AttributeSchemaPatchPlugin
      * @param AttributeSaveHandler $handler the active gate and reconcile-or-invalidate logic
      * @param AttributeSaveContext $saveContext relays the captured state from the before phase to the after phase
      * @param AttributeFieldPolicy $policy owns which flags actually affect the schema
+     * @param PersistedAttributeFlags $persistedFlags the flags stored before this save
      */
     public function __construct(
         private readonly AttributeSaveHandler $handler,
         private readonly AttributeSaveContext $saveContext,
-        private readonly AttributeFieldPolicy $policy
+        private readonly AttributeFieldPolicy $policy,
+        private readonly PersistedAttributeFlags $persistedFlags
     ) {
     }
 
     /**
      * Capture what the after phase needs before the attribute is saved — `afterSave` cannot see it:
      * whether the attribute is new, whether it touches the schema (a new one: any schema flag set;
-     * an existing one: a schema flag changed) and whether its labels just became public. Read here
-     * while the dirty-field state is still available.
+     * an existing one: a schema flag changed) and whether its labels just became public. Compared
+     * against the stored flags, read here before the save overwrites them.
      *
      * @param NativeAttributePlugin $subject the wrapped native plugin
      * @param AttributeResourceModel $attributeResource the save target (the native plugin's subject)
@@ -63,11 +66,12 @@ class AttributeSchemaPatchPlugin
         AbstractModel $attribute
     ): void {
         $isNew = $attribute->isObjectNew();
+        $before = $isNew ? [] : $this->persistedFlags->get($attribute);
         $this->saveContext->push(
             $isNew,
-            $isNew ? $this->policy->schemaFlagsSet($attribute) : $this->policy->schemaFlagsChanged($attribute),
-            $this->policy->searchConfigChanged($attribute),
-            !$isNew && $this->policy->optionLabelsBecameExposed($attribute)
+            $isNew ? $this->policy->schemaFlagsSet($attribute) : $this->policy->schemaFlagsChanged($attribute, $before),
+            $this->policy->searchConfigChanged($attribute, $before),
+            !$isNew && $this->policy->optionLabelsBecameExposed($attribute, $before)
         );
     }
 

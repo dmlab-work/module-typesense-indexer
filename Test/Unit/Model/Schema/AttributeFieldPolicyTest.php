@@ -204,10 +204,46 @@ class AttributeFieldPolicyTest extends TestCase
     {
         // `is_visible_in_advanced_search` has no schema effect, so it is absent from SCHEMA_FLAGS, but
         // native resets the search-request config when it changes — searchConfigChanged must catch it.
-        self::assertTrue($this->policy->searchConfigChanged($this->changedAttribute('is_visible_in_advanced_search')));
-        self::assertTrue($this->policy->searchConfigChanged($this->changedAttribute('is_searchable')));
-        self::assertFalse($this->policy->searchConfigChanged($this->changedAttribute('used_for_sort_by')));
-        self::assertFalse($this->policy->searchConfigChanged($this->changedAttribute('position')));
+        self::assertTrue(
+            $this->policy->searchConfigChanged(...$this->changedAttribute('is_visible_in_advanced_search'))
+        );
+        self::assertTrue($this->policy->searchConfigChanged(...$this->changedAttribute('is_searchable')));
+        self::assertFalse($this->policy->searchConfigChanged(...$this->changedAttribute('used_for_sort_by')));
+        self::assertFalse($this->policy->searchConfigChanged(...$this->changedAttribute('position')));
+    }
+
+    public function testSchemaFlagsChangedComparesAgainstTheStoredFlags(): void
+    {
+        foreach (AttributeFieldPolicy::SCHEMA_FLAGS as $flag) {
+            self::assertTrue($this->policy->schemaFlagsChanged(...$this->changedAttribute($flag)), $flag);
+        }
+        self::assertFalse($this->policy->schemaFlagsChanged(...$this->changedAttribute('is_visible_on_front')));
+        self::assertTrue($this->policy->schemaFlagsChanged(
+            $this->savedAttribute([], ['is_filterable' => 2]),
+            ['is_filterable' => '1']
+        ));
+    }
+
+    public function testSameValuesOrUnsetFlagsAreNotAChange(): void
+    {
+        // A null flag is not written, so it keeps the stored value; '1' and 1 are the same flag.
+        $stored = array_fill_keys(AttributeFieldPolicy::TRACKED_FLAGS, '1');
+        $attribute = $this->savedAttribute([], ['is_searchable' => 1, 'is_filterable' => true]);
+
+        self::assertFalse($this->policy->schemaFlagsChanged($attribute, $stored));
+        self::assertFalse($this->policy->searchConfigChanged($attribute, $stored));
+        self::assertFalse($this->policy->optionLabelsBecameExposed($attribute, $stored));
+    }
+
+    public function testTrackedFlagsCoverEveryComparedFlag(): void
+    {
+        $compared = array_values(array_unique(array_merge(
+            AttributeFieldPolicy::SCHEMA_FLAGS,
+            AttributeFieldPolicy::SEARCH_CONFIG_FLAGS,
+            AttributeFieldPolicy::STOREFRONT_FLAGS
+        )));
+
+        self::assertEqualsCanonicalizing($compared, AttributeFieldPolicy::TRACKED_FLAGS);
     }
 
     public function testSchemaFlagsSetDetectsAnyTruthySchemaFlag(): void
@@ -228,16 +264,15 @@ class AttributeFieldPolicyTest extends TestCase
     }
 
     /**
-     * An attribute stub that reports exactly one changed flag.
+     * An attribute saving exactly one flag flipped from its stored value, and those stored flags.
+     *
+     * @return array{0:Attribute,1:array<string,string>}
      */
-    private function changedAttribute(string $changedFlag): Attribute
+    private function changedAttribute(string $changedFlag): array
     {
-        $attribute = $this->createStub(Attribute::class);
-        $attribute->method('dataHasChangedFor')->willReturnCallback(
-            static fn (string $flag): bool => $flag === $changedFlag
-        );
+        $stored = array_fill_keys(AttributeFieldPolicy::TRACKED_FLAGS, '0');
 
-        return $attribute;
+        return [$this->savedAttribute([], [$changedFlag => '1'] + $stored), $stored];
     }
 
     public function testNoWeightKeyEverReachesAFieldSpec(): void
@@ -274,16 +309,17 @@ class AttributeFieldPolicyTest extends TestCase
     }
 
     /**
-     * @param array<string,mixed> $orig
+     * An attribute being saved with `$data`; `$stored` is merged in as the unchanged rest.
+     *
+     * @param array<string,mixed> $stored
      * @param array<string,mixed> $data
      */
-    private function savedAttribute(array $orig, array $data, string $frontend = 'select'): Attribute
+    private function savedAttribute(array $stored, array $data, string $frontend = 'select'): Attribute
     {
-        $data += $orig;
+        $data += $stored;
         $attribute = $this->createStub(Attribute::class);
         $attribute->method('getFrontendInput')->willReturn($frontend);
         $attribute->method('getBackendType')->willReturn('int');
-        $attribute->method('getOrigData')->willReturnCallback(static fn (string $key): mixed => $orig[$key] ?? null);
         $attribute->method('getData')->willReturnCallback(static fn (string $key): mixed => $data[$key] ?? null);
 
         return $attribute;
@@ -293,23 +329,37 @@ class AttributeFieldPolicyTest extends TestCase
     {
         foreach (AttributeFieldPolicy::STOREFRONT_FLAGS as $flag) {
             self::assertTrue(
-                $this->policy->optionLabelsBecameExposed($this->savedAttribute([$flag => '0'], [$flag => '1'])),
+                $this->policy->optionLabelsBecameExposed($this->savedAttribute([], [$flag => '1']), [$flag => '0']),
                 $flag
             );
         }
         self::assertFalse($this->policy->optionLabelsBecameExposed(
-            $this->savedAttribute(['is_visible_on_front' => 1], ['is_visible_on_front' => 0, 'is_searchable' => 1])
+            $this->savedAttribute([], ['is_visible_on_front' => 0, 'is_searchable' => 1]),
+            ['is_visible_on_front' => 1]
         ));
         self::assertFalse($this->policy->optionLabelsBecameExposed(
-            $this->savedAttribute(['used_in_product_listing' => 1], ['used_in_product_listing' => 0])
+            $this->savedAttribute([], ['used_in_product_listing' => 0]),
+            ['used_in_product_listing' => 1]
         ));
-        self::assertFalse($this->policy->optionLabelsBecameExposed($this->savedAttribute([], ['is_global' => 1])));
+        self::assertFalse($this->policy->optionLabelsBecameExposed($this->savedAttribute([], ['is_global' => 1]), []));
+    }
+
+    public function testAlreadyExposedAttributeReSavedWithItsFlagsIsNotNewlyExposed(): void
+    {
+        // The repository path: no origData, the same flags re-saved.
+        $stored = ['is_filterable' => '1', 'is_searchable' => '1'];
+
+        self::assertFalse($this->policy->optionLabelsBecameExposed(
+            $this->savedAttribute([], ['is_filterable_in_search' => 1] + $stored),
+            $stored
+        ));
     }
 
     public function testOptionLabelsBecameExposedIgnoresNonOptionAttributes(): void
     {
         self::assertFalse($this->policy->optionLabelsBecameExposed(
-            $this->savedAttribute(['is_visible_on_front' => 0], ['is_visible_on_front' => 1], 'text')
+            $this->savedAttribute([], ['is_visible_on_front' => 1], 'text'),
+            ['is_visible_on_front' => 0]
         ));
     }
 }

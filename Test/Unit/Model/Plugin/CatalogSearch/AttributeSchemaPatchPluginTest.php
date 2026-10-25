@@ -10,6 +10,7 @@ namespace DmLab\TypesenseIndexer\Test\Unit\Model\Plugin\CatalogSearch;
 use DmLab\TypesenseIndexer\Model\Plugin\AttributeSaveContext;
 use DmLab\TypesenseIndexer\Model\Plugin\AttributeSaveHandler;
 use DmLab\TypesenseIndexer\Model\Plugin\CatalogSearch\AttributeSchemaPatchPlugin;
+use DmLab\TypesenseIndexer\Model\Plugin\PersistedAttributeFlags;
 use DmLab\TypesenseIndexer\Model\Schema\AttributeFieldPolicy;
 use DmLab\TypesenseIndexer\Model\Schema\FieldNameResolver;
 use Magento\Catalog\Model\ResourceModel\Attribute as AttributeResourceModel;
@@ -34,6 +35,9 @@ class AttributeSchemaPatchPluginTest extends TestCase
     /** @var AttributeFieldPolicy */
     private AttributeFieldPolicy $policy;
 
+    /** @var PersistedAttributeFlags */
+    private PersistedAttributeFlags $persistedFlags;
+
     /** @var NativeAttributePlugin */
     private NativeAttributePlugin $nativePlugin;
 
@@ -49,6 +53,7 @@ class AttributeSchemaPatchPluginTest extends TestCase
         // A real context so the before → after state relay is exercised end to end.
         $this->saveContext = new AttributeSaveContext();
         $this->policy = $this->createStub(AttributeFieldPolicy::class);
+        $this->persistedFlags = $this->createStub(PersistedAttributeFlags::class);
         $this->nativePlugin = $this->createStub(NativeAttributePlugin::class);
         $this->attributeResource = $this->createStub(AttributeResourceModel::class);
         $this->result = $this->createStub(AttributeResourceModel::class);
@@ -68,7 +73,7 @@ class AttributeSchemaPatchPluginTest extends TestCase
 
     private function plugin(): AttributeSchemaPatchPlugin
     {
-        return new AttributeSchemaPatchPlugin($this->handler, $this->saveContext, $this->policy);
+        return new AttributeSchemaPatchPlugin($this->handler, $this->saveContext, $this->policy, $this->persistedFlags);
     }
 
     /**
@@ -197,9 +202,10 @@ class AttributeSchemaPatchPluginTest extends TestCase
         $attribute = $this->createStub(AbstractAttribute::class);
         $attribute->method('isObjectNew')->willReturn(false);
         $attribute->method('getFrontendInput')->willReturn('select');
-        $attribute->method('dataHasChangedFor')->willReturnCallback(
-            static fn (string $flag): bool => $flag === 'used_for_sort_by'
+        $attribute->method('getData')->willReturnCallback(
+            static fn (string $flag): ?string => $flag === 'used_for_sort_by' ? '1' : null
         );
+        $this->persistedFlags->method('get')->willReturn(['used_for_sort_by' => '0']);
 
         $handler = $this->handlerMock(true);
         $handler->expects(self::once())->method('handleAttributeSave');
@@ -262,23 +268,19 @@ class AttributeSchemaPatchPluginTest extends TestCase
     }
 
     /**
-     * A real catalog attribute (select, int) with the given original and current data.
+     * A catalog select (int) attribute with the given stored flags and the data being saved.
      *
-     * @param array<string,mixed> $orig
+     * @param array<string,mixed> $stored
      * @param array<string,mixed> $data
      */
-    private function catalogSelect(array $orig, array $data, bool $isNew = false): CatalogAttribute
+    private function catalogSelect(array $stored, array $data, bool $isNew = false): CatalogAttribute
     {
-        $data += $orig;
         $attribute = $this->createStub(CatalogAttribute::class);
         $attribute->method('isObjectNew')->willReturn($isNew);
         $attribute->method('getFrontendInput')->willReturn('select');
         $attribute->method('getBackendType')->willReturn('int');
-        $attribute->method('getOrigData')->willReturnCallback(static fn (string $key): mixed => $orig[$key] ?? null);
         $attribute->method('getData')->willReturnCallback(static fn (string $key): mixed => $data[$key] ?? null);
-        $attribute->method('dataHasChangedFor')->willReturnCallback(
-            static fn (string $key): bool => ($data[$key] ?? null) != ($orig[$key] ?? null)
-        );
+        $this->persistedFlags->method('get')->willReturn($stored);
 
         return $attribute;
     }
@@ -316,6 +318,40 @@ class AttributeSchemaPatchPluginTest extends TestCase
             ['is_visible_on_front' => 1, 'is_filterable' => 0],
             ['is_visible_on_front' => 0, 'is_filterable' => 1]
         ));
+    }
+
+    public function testUnchangedFlagsOnAnExposedAttributeWithoutOrigDataOnlyPatchTheChange(): void
+    {
+        // Repository/EavConfig attributes carry no origData; the stored flags decide what changed.
+        $this->policy = new AttributeFieldPolicy($this->createStub(FieldNameResolver::class));
+        $handler = $this->handlerMock(true);
+        $handler->expects(self::never())->method('handleLabelsExposed');
+        $handler->expects(self::once())->method('handleAttributeSave');
+
+        $stored = ['is_filterable' => '1', 'is_filterable_in_search' => '0', 'is_searchable' => '1'];
+        $this->save($this->catalogSelect($stored, ['is_filterable_in_search' => 1] + $stored));
+    }
+
+    public function testNoFlagChangeWithoutOrigDataIsANoOp(): void
+    {
+        $this->policy = new AttributeFieldPolicy($this->createStub(FieldNameResolver::class));
+        $handler = $this->handlerMock(true);
+        $handler->expects(self::never())->method('handleLabelsExposed');
+        $handler->expects(self::never())->method('handleAttributeSave');
+        $handler->expects(self::never())->method('refreshSearchConfig');
+
+        $stored = ['is_filterable' => '1', 'is_searchable' => '1', 'used_in_product_listing' => '1'];
+        $this->save($this->catalogSelect($stored, ['is_filterable' => 1, 'is_searchable' => 1]));
+    }
+
+    public function testNewAttributeSkipsThePersistedLookup(): void
+    {
+        $persistedFlags = $this->createMock(PersistedAttributeFlags::class);
+        $persistedFlags->expects(self::never())->method('get');
+        $this->persistedFlags = $persistedFlags;
+        $this->handlerMock(true)->expects(self::once())->method('refreshSearchConfig');
+
+        $this->save($this->attribute(true));
     }
 
     public function testNewExposedAttributeDoesNotInvalidate(): void
