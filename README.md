@@ -116,7 +116,7 @@ composite-merged option ids and their labels.
 
 ## Requirements
 
-Magento 2.4.9 · PHP 8.3–8.5 · `dmlab/module-typesense-core ^0.2.0`.
+Magento 2.4.9+ · PHP 8.3–8.5 · `dmlab/module-typesense-core ^0.2.0`.
 
 ## Tests
 
