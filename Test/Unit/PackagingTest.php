@@ -21,11 +21,11 @@ use RecursiveIteratorIterator;
 
 class PackagingTest extends TestCase
 {
-    private const string ROOT = __DIR__ . '/../..';
+    private const ROOT = __DIR__ . '/../..';
 
-    private const string OSL_LINE = 'Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.';
+    private const OSL_LINE = 'Licensed under the Open Software License version 3.0 (OSL-3.0). See LICENSE.';
 
-    private const array REQUIRED_PACKAGES = [
+    private const REQUIRED_PACKAGES = [
         'magento/framework',
         'dmlab/module-typesense-core',
         'magento/module-backend',
@@ -96,6 +96,27 @@ class PackagingTest extends TestCase
         self::assertArrayNotHasKey('magento/module-customer', $composer['require']);
     }
 
+    public function testComposerSupportsMagento247AndPhp82Plus(): void
+    {
+        $composer = $this->composer();
+
+        self::assertSame('~8.2.0||~8.3.0||~8.4.0||~8.5.0', $composer['require']['php']);
+        self::assertSame('^103.0.7', $composer['require']['magento/framework']);
+    }
+
+    public function testComposerCarriesPublishingMetadata(): void
+    {
+        $composer = $this->composer();
+        $repo = 'https://github.com/dmlab-work/module-typesense-indexer';
+
+        self::assertSame($repo, $composer['homepage'] ?? null);
+        self::assertSame($repo . '/issues', $composer['support']['issues'] ?? null);
+        self::assertSame($repo, $composer['support']['source'] ?? null);
+        self::assertNotEmpty($composer['keywords'] ?? []);
+        self::assertContains('magento2', $composer['keywords']);
+        self::assertArrayHasKey('dmlab/module-typesense-search', $composer['suggest'] ?? []);
+    }
+
     public function testComposerHasNoOpenEndedConstraint(): void
     {
         $composer = $this->composer();
@@ -157,6 +178,24 @@ class PackagingTest extends TestCase
         $lines = file(self::ROOT . '/.gitattributes', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 
         self::assertSame(['/.github export-ignore', '/Test export-ignore'], $lines);
+    }
+
+    public function testEveryLocalReadmeImageExists(): void
+    {
+        preg_match_all('/!\[[^\]]*\]\(([^)\s]+)\)/', (string)file_get_contents(self::ROOT . '/README.md'), $m);
+        $local = array_filter($m[1], static fn (string $src): bool => !preg_match('#^https?://#', $src));
+
+        self::assertNotEmpty($local);
+        foreach ($local as $src) {
+            self::assertFileExists(self::ROOT . '/' . $src);
+        }
+    }
+
+    public function testChangelogTopSectionMatchesComposerVersion(): void
+    {
+        preg_match('/^## (\S+)/m', (string)file_get_contents(self::ROOT . '/CHANGELOG.md'), $m);
+
+        self::assertSame($this->composer()['version'], $m[1] ?? null);
     }
 
     public function testEveryRunScopedCacheIsResetByTheIndexerHandler(): void

@@ -13,33 +13,28 @@ use DmLab\TypesenseIndexer\Model\Schema\SearchableFieldsProvider;
 use Magento\Catalog\Model\ResourceModel\Eav\Attribute;
 use Magento\Catalog\Model\ResourceModel\Product\Attribute\Collection;
 use Magento\Catalog\Model\ResourceModel\Product\Attribute\CollectionFactory;
-use Magento\Framework\TestFramework\Unit\Helper\MockCreationTrait;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
-// The magic-getter mocks below are used as return stubs, not expectation targets.
+// The attribute mocks below are used as return stubs, not expectation targets.
 #[AllowMockObjectsWithoutExpectations]
 class SearchableFieldsProviderTest extends TestCase
 {
-    use MockCreationTrait;
-
     /**
      * @param array<string,mixed> $data
      */
     private function attribute(array $data): Attribute
     {
-        // `getSearchWeight` is a magic DataObject getter (no declared method); Magento's own
-        // PHPUnit-12 helper mocks it via reflection.
-        $attribute = $this->createPartialMockWithReflection(
+        // `getSearchWeight` is a magic DataObject getter (no declared method), so it reads `_data`.
+        $attribute = $this->createPartialMock(
             Attribute::class,
-            [
-                'getAttributeCode', 'getIsSearchable', 'getSearchWeight', 'getFrontendInput', 'getBackendType',
-                'getSourceModel',
-            ]
+            ['getAttributeCode', 'getIsSearchable', 'getFrontendInput', 'getBackendType', 'getSourceModel']
         );
+        if (array_key_exists('weight', $data)) {
+            $attribute->setData('search_weight', $data['weight']);
+        }
         $attribute->method('getAttributeCode')->willReturn($data['code'] ?? 'attr');
         $attribute->method('getIsSearchable')->willReturn($data['searchable'] ?? 0);
-        $attribute->method('getSearchWeight')->willReturn($data['weight'] ?? 0);
         $attribute->method('getFrontendInput')->willReturn($data['input'] ?? 'text');
         $attribute->method('getBackendType')->willReturn($data['backend'] ?? 'varchar');
         $attribute->method('getSourceModel')->willReturn($data['source'] ?? null);
@@ -80,6 +75,13 @@ class SearchableFieldsProviderTest extends TestCase
         ]);
 
         self::assertSame(['name' => 1, 'description' => 1], $provider->get(1));
+    }
+
+    public function testStringWeightFromTheDatabaseIsCastToInt(): void
+    {
+        $provider = $this->provider([$this->attribute(['code' => 'name', 'searchable' => 1, 'weight' => '5'])]);
+
+        self::assertSame(['name' => 5], $provider->get(1));
     }
 
     public function testDisabledSearchAttributeIsAbsent(): void

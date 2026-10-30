@@ -1,25 +1,46 @@
 {
     "name": "dmlab/module-typesense-indexer",
-    "description": "Turns the Magento catalog into Typesense documents and owns the attribute→schema policy. Implements Magento's indexer contracts so catalogsearch_fulltext writes to Typesense: FAT documents, THIN schema, in-place flag PATCH instead of full reindex.",
+    "description": "Indexes the Magento catalog into Typesense: filter attribute changes apply in place without a reindex, full reindexes swap in a fresh collection with zero downtime.",
     "type": "magento2-module",
     "license": "OSL-3.0",
     "version": "0.2.1",
+    "keywords": [
+        "magento2",
+        "magento2-module",
+        "magento 2",
+        "typesense",
+        "search engine",
+        "catalog search",
+        "indexer",
+        "layered navigation",
+        "zero downtime reindex",
+        "opensearch replacement",
+        "elasticsearch alternative"
+    ],
+    "homepage": "https://github.com/dmlab-work/module-typesense-indexer",
+    "support": {
+        "issues": "https://github.com/dmlab-work/module-typesense-indexer/issues",
+        "source": "https://github.com/dmlab-work/module-typesense-indexer"
+    },
     "require": {
-        "php": "~8.3.0||~8.4.0||~8.5.0",
-        "magento/framework": "^103.0.9",
+        "php": "~8.2.0||~8.3.0||~8.4.0||~8.5.0",
+        "magento/framework": "^103.0.7",
         "dmlab/module-typesense-core": "^0.2.0",
-        "magento/module-backend": "^102.0.9",
-        "magento/module-catalog": "^104.0.9",
-        "magento/module-catalog-inventory": "^100.4.9",
-        "magento/module-catalog-search": "^102.0.9",
-        "magento/module-config": "^101.2.9",
-        "magento/module-eav": "^102.1.9",
-        "magento/module-search": "^101.1.9",
-        "magento/module-store": "^101.1.9",
+        "magento/module-backend": "^102.0.7",
+        "magento/module-catalog": "^104.0.7",
+        "magento/module-catalog-inventory": "^100.4.7",
+        "magento/module-catalog-search": "^102.0.7",
+        "magento/module-config": "^101.2.7",
+        "magento/module-eav": "^102.1.7",
+        "magento/module-search": "^101.1.7",
+        "magento/module-store": "^101.1.7",
         "psr/log": "^2.0||^3.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "^12.0"
+        "phpunit/phpunit": "^11.5||^12.5"
+    },
+    "suggest": {
+        "dmlab/module-typesense-search": "Registers Typesense as the search engine and serves search, category pages and layered navigation from this index"
     },
     "autoload": {
         "files": [
