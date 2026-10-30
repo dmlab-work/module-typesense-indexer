@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+- Supports Magento 2.4.7+ (`magento/framework ^103.0.7`) and PHP 8.2–8.5.
+- CI runs on PHP 8.2–8.5; CI installs are no longer counted as Packagist downloads.
+- Composer keywords, homepage, support and suggest added.
+- README rewritten (screenshot, Hosting, Architecture).
+
 ## 0.2.1
 
 - Fixed: saving or deleting a search synonym no longer invalidates `catalogsearch_fulltext` on Typesense (synonyms sync in place).

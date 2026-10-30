@@ -3,7 +3,7 @@
     "description": "Indexes the Magento catalog into Typesense: filter attribute changes apply in place without a reindex, full reindexes swap in a fresh collection with zero downtime.",
     "type": "magento2-module",
     "license": "OSL-3.0",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "keywords": [
         "magento2",
         "magento2-module",
